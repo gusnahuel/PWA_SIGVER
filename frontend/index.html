@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SIGVER | ANDE - Mapa de Equipos</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- MarkerCluster CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    <!-- Nuestro CSS -->
+    <link rel="stylesheet" href="/static/css/style.css">
+    
+    <link rel="manifest" href="/manifest.json">
+   
+    <meta name="theme-color" content="#002f6c">
+
+        <!-- Fuente Inter (Google Fonts) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Íconos FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+      <!-- PANTALLA DE CARGA -->
+    <div id="loading-screen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #002f6c; z-index: 10000; display: none; flex-direction: column; justify-content: center; align-items: center; color: white; transition: opacity 0.5s ease;">
+        <div style="font-size: 3rem; margin-bottom: 20px;">⚡</div>
+        <h2 style="margin: 0; font-family: sans-serif;">SIGVER</h2>
+        <p style="color: #ccc; font-size: 14px; margin-top: 5px;">Cargando equipos...</p>
+        <div style="margin-top: 30px; width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.3); border-top-color: #f5b000; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+        <style>
+            @keyframes spin { 100% { transform: rotate(360deg); } }
+        </style>
+    </div>
+      <!-- PANTALLA DE LOGIN PREMIUM -->
+    <div id="login-screen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #001f48 0%, #002f6c 100%); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px;">
+        
+        <div class="login-card">
+            
+            <div style="text-align: center; margin-bottom: 25px;">
+                <!-- Usamos el mismo logo SVG del pin que armamos para el menú -->
+                <svg width="50" height="50" viewBox="0 0 512 512" style="margin-bottom: 10px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));">
+                    <circle cx="256" cy="213" r="133" fill="#f5b000" />
+                    <circle cx="256" cy="213" r="80" fill="#002f6c" />
+                    <polygon points="256,400 120,213 392,213" fill="#f5b000" />
+                    <path d="M 200,226 L 240,266 L 320,160" fill="none" stroke="#ffffff" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <h2 style="color: #002f6c; margin: 0; font-size: 28px; font-weight: 800; letter-spacing: 1px;">SIGVER</h2>
+                <p style="color: #64748b; font-size: 14px; margin-top: 5px;">Gestión de Activos en Campo</p>
+            </div>
+            
+            <form id="login-form">
+                <div class="form-group">
+                    <label>Usuario</label>
+                    <div class="input-wrapper">
+                        <i class="fa-solid fa-user input-icon"></i>
+                        <input type="text" id="login-username" class="form-control" placeholder="Ingrese su legajo o usuario" required autocomplete="username">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Contraseña</label>
+                    <div class="input-wrapper">
+                        <i class="fa-solid fa-lock input-icon"></i>
+                        <input type="password" id="login-password" class="form-control" placeholder="••••••••" required autocomplete="current-password">
+                        <!-- El ojito para ver la contraseña -->
+                        <i class="fa-solid fa-eye password-toggle" id="toggle-password"></i>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn-submit" id="btn-login" style="margin-top: 10px;">
+                    Ingresar al Sistema
+                </button>
+                
+                <div id="login-error" style="color: #ef4444; text-align: center; margin-top: 15px; font-size: 13px; font-weight: bold;"></div>
+            </form>
+        </div>
+        
+        <p style="color: rgba(255,255,255,0.6); font-size: 12px; margin-top: 30px;">
+            ANDE - Administración Nacional de Electricidad
+        </p>
+    </div>
+    <header class="app-header" id="app-header" style="display: none;">
+        <div class="brand">
+            <button id="btn-open-menu" onclick="abrirMenu()" style="background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; margin-right: 10px; display: flex; align-items: center;">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+            <span class="brand-title">SIGVER</span>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <span id="status-badge" class="status-badge" style="display: none;"></span>
+        </div>
+    </header>
+
+    <!-- Mapa -->
+    <div id="map" style="width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1;"></div>
+
+       <!-- MENÚ LATERAL (ESTILO GOOGLE MAPS) -->
+    <div id="sidebar-overlay" class="sidebar-overlay" onclick="cerrarMenu()"></div>
+    
+    <aside id="sidebar-menu" class="sidebar">
+        <div class="sidebar-header">
+            <div class="brand">
+                <svg width="28" height="28" viewBox="0 0 512 512" style="margin-right: 8px;">
+                    <circle cx="256" cy="213" r="133" fill="#f5b000" />
+                    <circle cx="256" cy="213" r="80" fill="#002f6c" />
+                    <polygon points="256,400 120,213 392,213" fill="#f5b000" />
+                    <path d="M 200,226 L 240,266 L 320,160" fill="none" stroke="#ffffff" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <span>SIGVER</span>
+            </div>
+            <button type="button" onclick="cerrarMenu()" style="background: none; border: none; font-size: 1.2rem; color: #666; cursor: pointer; z-index: 10; position: relative;">
+        <i class="fa-solid fa-xmark" style="pointer-events: none;"></i>
+        </button>
+        </div>
+
+        <div class="sidebar-user">
+            <div class="user-avatar"><i class="fa-solid fa-user"></i></div>
+            <div>
+                <div class="user-name" id="menu-user-name">Técnico ANDE</div>
+                <div class="user-role">Personal de Operaciones</div>
+            </div>
+        </div>
+
+        <ul class="sidebar-list">
+            <li onclick="abrirBusqueda()">
+                <i class="fa-solid fa-magnifying-glass" style="color: #002f6c;"></i> Buscar Equipo
+            </li>
+            <li onclick="abrirReclamos()">
+                <i class="fa-solid fa-triangle-exclamation" style="color: #ef4444;"></i> Mis Reclamos
+            </li>    
+        </ul>
+
+        <div style="border-top: 1px solid #e2e8f0; margin: 10px 0;"></div>
+
+        <ul class="sidebar-list">
+            <li onclick="sincronizarPendientes(true)">
+                <i class="fa-solid fa-rotate" style="color: #10b981;"></i> Sincronizar Datos
+                <span id="badge-pendientes" style="display: none; background: #f5b000; color: #002f6c; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: auto; font-weight: bold;">0</span>
+            </li>
+            <li onclick="abrirModalLogout()">
+                <i class="fa-solid fa-power-off" style="color: #ef4444;"></i> Cerrar Sesión
+            </li>
+        </ul>
+    </aside>
+
+    <!-- 👇 NUEVO BOTÓN FLOTANTE: MI UBICACIÓN 👇 -->
+    <button id="btn-my-location" onclick="centrarEnMiUbicacion()" title="Mi Ubicación">
+        <i class="fa-solid fa-location-crosshairs"></i>
+    </button>
+    
+    <!-- Leyenda -->
+    <div class="legend" id="legend">
+        <h4>Simbología</h4>
+        <div class="legend-item">
+            <span class="dot dot-etc-cerrado"></span> ETC Cerrado
+        </div>
+        <div class="legend-item">
+            <span class="dot dot-etc-abierto"></span> ETC Abierto
+        </div>
+        <div class="legend-item">
+            <span class="dot dot-regulador"></span> Regulador
+        </div>
+    </div>
+        <!-- BOTTOM SHEET: FORMULARIO DE VERIFICACIÓN ETC -->
+    <div id="sheet-verificacion" class="bottom-sheet">
+        <div class="sheet-header">
+            <h3 class="sheet-title">⚡ Verificar ETC <span id="verif-nro-equipo"></span></h3>
+            <button class="btn-close" id="btn-cerrar-sheet">✕</button>
+        </div>
+        
+        <form id="form-verificacion">
+            <!-- Guardamos el ID del equipo en un campo oculto -->
+            <input type="hidden" id="verif-equipo-id">
+            
+            <div class="form-group">
+                <label>¿Tiene algún inconveniente?</label>
+                <select id="verif-tiene-inconveniente" class="form-control">
+                    <option value="no">No, equipo operativo</option>
+                    <option value="si">Sí, presenta falla</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="grupo-falla" style="display: none;">
+                <label>Tipos de Falla (Puede seleccionar varias)</label>
+                <div id="lista-fallas" style="max-height: 150px; overflow-y: auto; border: 1px solid #ccc; border-radius: 8px; padding: 10px; background: #f9f9f9;">
+                    <!-- Los checkboxes se cargan por JS -->
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Observaciones</label>
+                <textarea id="verif-observaciones" class="form-control" rows="2" placeholder="Detalles adicionales..."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Foto del equipo</label>
+                <!-- Ocultamos el input original -->
+                <input type="file" id="verif-foto" accept="image/*" capture="environment" style="display: none;">
+                
+                <!-- Botón personalizado -->
+                <label for="verif-foto" style="display: flex; align-items: center; justify-content: center; gap: 10px; padding: 16px; background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; color: #64748b; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                    <i class="fa-solid fa-camera"></i> Tomar o seleccionar foto
+                </label>
+                
+                <img id="preview-foto" style="display: none; width: 100%; max-height: 200px; object-fit: cover; border-radius: 12px; margin-top: 10px;" alt="Vista previa">
+            </div>
+                        <div class="form-group" style="background: #fff3cd; padding: 10px; border-radius: 8px; border: 1px solid #ffeeba;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; text-transform: none; font-size: 14px; color: #856404;">
+                    <input type="checkbox" id="verif-req-reclamo" style="width: 18px; height: 18px;">
+                    ⚠️ ¿Requiere generar un reclamo de mantenimiento?
+                </label>
+                <div id="grupo-prioridad-etc" style="display: none; margin-top: 10px;">
+                    <select id="verif-prioridad" class="form-control">
+                        <option value="BAJA">Prioridad Baja</option>
+                        <option value="MEDIA" selected>Prioridad Media</option>
+                        <option value="ALTA">Prioridad Alta</option>
+                        <option value="CRITICA">Prioridad Crítica</option>
+                    </select>
+                </div>
+            </div>
+            <button type="submit" class="btn-submit" id="btn-guardar-verif">Guardar Verificación</button>
+            <div id="verif-status" style="text-align: center; margin-top: 10px; font-size: 13px; font-weight: bold;"></div>
+        </form>
+    </div>
+ <!-- BOTTOM SHEET: FORMULARIO DE REGULADOR -->
+    <div id="sheet-regulador" class="bottom-sheet">
+        <div class="sheet-header">
+            <h3 class="sheet-title">🔌 Verificar Regulador <span id="reg-codigo"></span></h3>
+            <button class="btn-close" id="btn-cerrar-sheet-reg">✕</button>
+        </div>
+        
+        <form id="form-regulador">
+            <input type="hidden" id="reg-componente-id">
+
+            <div class="form-row" style="display: flex; gap: 10px;">
+                <div class="form-group" style="flex: 1;">
+                    <label>Tipo de Control</label>
+                    <select id="reg-tipo-control" class="form-control">
+                        <option value="CONTROL_UNICO">Control Único</option>
+                        <option value="CONTROL_INDIVIDUAL">Control Individual</option>
+                        <option value="NO_APLICA">No Aplica</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>Tipo de Banco</label>
+                    <select id="reg-tipo-banco" class="form-control">
+                        <option value="DELTA_CERRADO">Delta Cerrado</option>
+                        <option value="DELTA_ABIERTO">Delta Abierto</option>
+                        <option value="MONOFASICO">Monofásico</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row" style="display: flex; gap: 10px;">
+                <div class="form-group" style="flex: 1;">
+                    <label>¿Tiene Valla Perimetral?</label>
+                    <select id="reg-valla" class="form-control">
+                        <option value="false">No</option>
+                        <option value="true">Sí</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>¿Es Híbrido?</label>
+                    <select id="reg-hibrido" class="form-control">
+                        <option value="false">No</option>
+                        <option value="true">Sí</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Configuración Observada</label>
+                <input type="text" id="reg-config-obs" class="form-control" placeholder="Ej: Sobre base de metal">
+            </div>
+
+            <div class="form-group">
+                <label>Estado del Sitio</label>
+                <select id="reg-estado-sitio" class="form-control">
+                    <option value="NORMAL">Normal</option>
+                    <option value="OBSERVADO">Observado</option>
+                    <option value="CRITICO">Crítico</option>
+                    <option value="FUERA_SERVICIO">Fuera de Servicio</option>
+                </select>
+            </div>
+                        <div class="form-group">
+                <label>¿La ubicación actual coincide con el equipo?</label>
+                <select id="reg-ubicacion-coincide" class="form-control">
+                    <option value="SI">Sí (Estoy en el lugar)</option>
+                    <option value="APROXIMADA">Aproximada (Estoy cerca)</option>
+                    <option value="NO">No (Estoy lejos)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Observaciones Generales</label>
+                <textarea id="reg-observaciones" class="form-control" rows="2"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Foto Frontal</label>
+                <input type="file" id="reg-foto-frontal" accept="image/*" capture="environment" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Foto Entorno</label>
+                <input type="file" id="reg-foto-entorno" accept="image/*" capture="environment" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Foto Control Único</label>
+                <input type="file" id="reg-foto-control" accept="image/*" capture="environment" class="form-control">
+            </div>
+             <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <button type="button" id="btn-add-termografia" style="flex: 1; padding: 10px; background: #002f6c; color: white; border: none; border-radius: 8px; font-weight: bold;">
+                    + Termografía
+                </button>
+                <button type="button" id="btn-add-pat" style="flex: 1; padding: 10px; background: #dc3545; color: white; border: none; border-radius: 8px; font-weight: bold;">
+                    + Ensayo PAT
+                </button>
+            </div>
+            <div id="lista-termografias" style="margin-bottom: 15px; font-size: 13px; color: #555;"></div>
+            <div id="lista-ensayos-pat" style="margin-bottom: 15px; font-size: 13px; color: #555;"></div>
+                       <div class="form-group" style="background: #fff3cd; padding: 10px; border-radius: 8px; border: 1px solid #ffeeba;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; text-transform: none; font-size: 14px; color: #856404;">
+                    <input type="checkbox" id="reg-req-reclamo" style="width: 18px; height: 18px;">
+                    ⚠️ ¿Requiere generar un reclamo de mantenimiento?
+                </label>
+                <div id="grupo-prioridad-reg" style="display: none; margin-top: 10px;">
+                    <select id="reg-prioridad" class="form-control">
+                        <option value="BAJA">Prioridad Baja</option>
+                        <option value="MEDIA" selected>Prioridad Media</option>
+                        <option value="ALTA">Prioridad Alta</option>
+                        <option value="CRITICA">Prioridad Crítica</option>
+                    </select>
+                </div>
+            </div>
+            <button type="submit" class="btn-submit" id="btn-guardar-reg">Guardar Verificación</button>
+            <div id="reg-status" style="text-align: center; margin-top: 10px; font-size: 13px; font-weight: bold;"></div>
+        </form>
+    </div>
+        <!-- MODAL: MEDICIÓN TERMOGRÁFICA -->
+    <div id="modal-termografia" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 20000; justify-content: center; align-items: center; padding: 20px;">
+        <div style="background: white; padding: 20px; border-radius: 12px; width: 100%; max-width: 400px; max-height: 90vh; overflow-y: auto;">
+            <h3 style="color: #002f6c; margin-top: 0;">Agregar Termografía</h3>
+            
+            <div class="form-group">
+                <label>Punto de Inspección</label>
+                <select id="term-punto" class="form-control">
+                    <!-- Se llena desde JS -->
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Temp. Punto (°C)</label>
+                <input type="number" id="term-temp-punto" class="form-control" placeholder="Ej: 45.5" step="0.1">
+            </div>
+            <div class="form-group">
+                <label>Temp. Ambiente (°C)</label>
+                <input type="number" id="term-temp-amb" class="form-control" placeholder="Ej: 25" step="0.1">
+            </div>
+            <div class="form-group">
+                <label>Corriente (A)</label>
+                <input type="number" id="term-corriente" class="form-control" placeholder="Ej: 120" step="0.1">
+            </div>
+            
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button type="button" id="btn-cancelar-term" style="flex: 1; padding: 10px; background: #ccc; border: none; border-radius: 8px; font-weight: bold;">Cancelar</button>
+                <button type="button" id="btn-guardar-term" style="flex: 1; padding: 10px; background: #28a745; color: white; border: none; border-radius: 8px; font-weight: bold;">Agregar</button>
+            </div>
+        </div>
+    </div>
+        <!-- MODAL: ENSAYO PAT -->
+    <div id="modal-pat" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 20000; justify-content: center; align-items: center; padding: 20px;">
+        <div style="background: white; padding: 20px; border-radius: 12px; width: 100%; max-width: 450px; max-height: 90vh; overflow-y: auto;">
+            <h3 style="color: #002f6c; margin-top: 0;">Agregar Ensayo PAT</h3>
+            
+            <div class="form-row" style="display: flex; gap: 10px;">
+                <div class="form-group" style="flex: 1;">
+                    <label>Método PAT</label>
+                    <input type="text" id="pat-metodo" class="form-control" placeholder="Ej: Metodo_62%">
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>Condición Suelo</label>
+                    <select id="pat-suelo" class="form-control">
+                        <option value="Húmedo">Húmedo</option>
+                        <option value="Seco">Seco</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Equipo de Medición</label>
+                <input type="text" id="pat-equipo" class="form-control" placeholder="Ej: Telurómetro KYORITSU">
+            </div>
+
+            <div class="form-group">
+                <label>Resultado</label>
+                <select id="pat-resultado" class="form-control">
+                    <option value="CONFORME">Conforme</option>
+                    <option value="NO_CONFORME">No Conforme</option>
+                    <option value="PENDIENTE">Pendiente Análisis</option>
+                </select>
+            </div>
+
+            <!-- SECCIÓN DE LECTURAS -->
+            <div style="border-top: 1px solid #ccc; margin-top: 15px; padding-top: 15px;">
+                <label style="font-weight: bold; color: #002f6c;">Lecturas del Ensayo</label>
+                <div style="display: flex; gap: 5px; margin-bottom: 10px; align-items: flex-end;">
+                    <div style="flex: 1;">
+                        <label style="font-size: 10px;">Distancia (m)</label>
+                        <input type="number" id="pat-lect-dist" class="form-control" placeholder="20">
+                    </div>
+                    <div style="flex: 1;">
+                        <label style="font-size: 10px;">Valor (Ohm)</label>
+                        <input type="number" id="pat-lect-val" class="form-control" placeholder="105.5">
+                    </div>
+                    <button type="button" id="btn-add-lectura" style="padding: 10px; background: #f5b000; color: #002f6c; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">+</button>
+                </div>
+                <div id="lista-lecturas-modal" style="font-size: 12px; background: #f9f9f9; padding: 5px; border-radius: 5px; max-height: 100px; overflow-y: auto;"></div>
+            </div>
+            
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button type="button" id="btn-cancelar-pat" style="flex: 1; padding: 10px; background: #ccc; border: none; border-radius: 8px; font-weight: bold;">Cancelar</button>
+                <button type="button" id="btn-guardar-pat" style="flex: 1; padding: 10px; background: #28a745; color: white; border: none; border-radius: 8px; font-weight: bold;">Guardar Ensayo</button>
+            </div>
+        </div>
+    </div>
+           <!-- PANEL DE BÚSQUEDA DE EQUIPOS -->
+    <div id="search-sheet" class="bottom-sheet">
+        <div class="search-header">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h3 class="sheet-title" style="margin: 0;">🔍 Buscar Equipo</h3>
+                <button class="btn-close" id="btn-close-search">✕</button>
+            </div>
+            
+            <input type="text" id="search-input" class="form-control" placeholder="Ej: 37008, SJB_01..." style="margin-bottom: 10px;">
+            
+            <select id="search-filter" class="search-select">
+                <option value="todos">Todos los equipos</option>
+                <option value="etc">Solo ETCs</option>
+                <option value="regulador">Solo Reguladores</option>
+            </select>
+        </div>
+        
+        <!-- 👇 LISTA DE RESULTADOS: Va adentro del panel de búsqueda, pero afuera del header 👇 -->
+        <div id="search-results" class="search-body">
+            <p style="text-align: center; color: #999; margin-top: 20px;">Escribe al menos 2 letras para buscar...</p>
+        </div>
+    </div> <!-- 👈 AQUÍ SE CIERRA EL PANEL DE BÚSQUEDA CORRECTAMENTE -->
+
+    <!-- PANEL DE RECLAMOS (Ahora es independiente) -->
+    <div id="sheet-reclamos" class="bottom-sheet" style="height: 80vh; display: flex; flex-direction: column;">
+        <div class="sheet-header" style="flex-shrink: 0;">
+            <h3 class="sheet-title">⚠️ Mis Reclamos Asignados</h3>
+            <button class="btn-close" id="btn-close-reclamos">✕</button>
+        </div>
+        <div id="lista-reclamos" style="flex: 1; overflow-y: auto; padding: 10px;">
+            <p style="text-align: center; color: #999; margin-top: 20px;">Cargando reclamos...</p>
+        </div>
+    </div>
+        <!-- MODAL DE CERRAR SESIÓN -->
+    <div id="logout-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-card">
+            <div class="modal-icon">
+                <i class="fa-solid fa-power-off"></i>
+            </div>
+            <h3 class="modal-title">Cerrar Sesión</h3>
+            <p class="modal-text">¿Estás seguro que deseas salir del sistema? Tendrás que ingresar tus credenciales nuevamente.</p>
+            
+            <div class="modal-actions">
+                <button class="btn-modal-cancel" onclick="cerrarModalLogout()">Cancelar</button>
+                <button class="btn-modal-confirm" onclick="ejecutarCierreSesion()">Cerrar Sesión</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CONTENEDOR DE NOTIFICACIONES (TOASTS) -->
+    <div id="toast-container" style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 99999; display: flex; flex-direction: column; gap: 10px; pointer-events: none;"></div>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- MarkerCluster JS -->
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <!-- Nuestro JS -->
+    <script type="module" src="/static/js/app.js"></script>
+
+</body>
+</html>

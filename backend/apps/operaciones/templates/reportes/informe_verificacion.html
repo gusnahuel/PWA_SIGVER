@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page {
+            size: A4;
+            margin: 2cm;
+            @bottom-center {
+                content: "SIGVER - ANDE | Página " counter(page) " de " counter(pages);
+                font-size: 10px;
+                color: #666;
+            }
+        }
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            color: #333;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #002f6c;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            color: #002f6c;
+            margin: 0;
+            font-size: 24px;
+        }
+        .header p {
+            margin: 5px 0 0 0;
+            font-size: 14px;
+            color: #666;
+        }
+        .info-box {
+            background: #f4f6f9;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .info-box table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .info-box td {
+            padding: 5px;
+        }
+        .info-box td strong {
+            color: #002f6c;
+        }
+        .section-title {
+            background: #002f6c;
+            color: white;
+            padding: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        table.data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        table.data-table th, table.data-table td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+        table.data-table th {
+            background: #e2e8f0;
+            color: #002f6c;
+        }
+        
+        .foto-full {
+            width: 50%;
+            max-height: 300px;
+            object-fit: cover;
+            margin-top: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .footer {
+            margin-top: 50px;
+            text-align: center;
+            font-size: 10px;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>⚡ SIGVER | ANDE</h1>
+        <p>Informe de Levantamiento y Verificación en Campo</p>
+    </div>
+
+    <div class="info-box">
+        <table>
+            <tr>
+                <td><strong>ID Verificación:</strong> {{ verificacion.id_verificacion }}</td>
+                <td><strong>Fecha:</strong> {{ verificacion.fecha_verificacion|date:"d/m/Y H:i" }}</td>
+            </tr>
+            <tr>
+                <td><strong>Responsable:</strong> {{ verificacion.responsable.nombre_completo }}</td>
+                <td><strong>Legajo:</strong> {{ verificacion.responsable.id_personal }}</td>
+            </tr>
+        </table>
+    </div>
+
+    {% if tipo == 'ETC' %}
+        <div class="section-title">Datos del Equipo Telecomandado (ETC)</div>
+        <table class="data-table">
+            <tr>
+                <th>Nro. Equipo</th>
+                <td>{{ verificacion.equipo_etc.nro_equipo }}</td>
+                <th>Alimentador</th>
+                <td>{{ verificacion.equipo_etc.alimentador.codigo }}</td>
+            </tr>
+            <tr>
+                <th>¿Tiene Inconveniente?</th>
+                <td>{% if verificacion.tiene_inconveniente %}Sí{% else %}No{% endif %}</td>
+                <th>Prioridad Reclamo</th>
+                <td>{{ verificacion.prioridad|default:"N/A" }}</td>
+            </tr>
+        </table>
+
+        {% if verificacion.tiene_inconveniente %}
+        <div class="section-title">Fallas Detectadas</div>
+        <ul>
+            {% for falla in verificacion.fallas.all %}
+                <li>{{ falla.codigo }} - {{ falla.descripcion }} ({{ falla.gravedad }})</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+    {% else %}
+        <div class="section-title">Datos del Regulador de Tensión</div>
+        <table class="data-table">
+            <tr>
+                <th>Sitio</th>
+                <td>{{ verificacion.sitio.id_sitio }}</td>
+                <th>Componente</th>
+                <td>{{ verificacion.componente.id_componente }}</td>
+            </tr>
+            <tr>
+                <th>Configuración Banco</th>
+                <td>{{ verificacion.tipo_banco_verificado }}</td>
+                <th>Estado del Sitio</th>
+                <td>{{ verificacion.estado_sitio }}</td>
+            </tr>
+        </table>
+
+        {% if verificacion.ensayos_pat.all %}
+        <div class="section-title">Ensayos PAT</div>
+        <table class="data-table">
+            <tr><th>Método</th><th>Resultado</th><th>Condición Suelo</th></tr>
+            {% for ensayo in verificacion.ensayos_pat.all %}
+            <tr>
+                <td>{{ ensayo.metodo_pat }}</td>
+                <td>{{ ensayo.resultado }}</td>
+                <td>{{ ensayo.condicion_suelo }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% endif %}
+    {% endif %}
+
+    <div class="section-title">Observaciones Generales</div>
+    <p>{{ verificacion.observaciones|default:"Sin observaciones registradas." }}</p>
+
+                   <!-- FOTOS -->
+    <div class="section-title">Registro Fotográfico</div>
+    <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+        <tr>
+            {% if tipo == 'ETC' %}
+                <td style="text-align: center; padding: 5px;">
+                    {% if foto_b64 %}
+                        <!-- Foto de ETC: Le damos un tamaño máximo controlado -->
+                        <img src="{{ foto_b64 }}" style="max-width: 400px; max-height: 250px; border-radius: 8px; border: 1px solid #ccc;">
+                    {% else %}
+                        <p style="color: #999;">No hay foto</p>
+                    {% endif %}
+                </td>
+            {% elif tipo == 'REGULADOR' %}
+                <!-- Foto 1: Frontal -->
+                <td style="width: 33%; text-align: center; vertical-align: top; padding: 5px;">
+                    {% if foto_frontal_b64 %}
+                        <img src="{{ foto_frontal_b64 }}" style="width: 100%; max-width: 150px; max-height: 120px; border-radius: 8px; border: 1px solid #ccc;">
+                        <br><span style="font-size: 11px; font-weight: bold; color: #555;">Frontal</span>
+                    {% endif %}
+                </td>
+                
+                <!-- Foto 2: Entorno -->
+                <td style="width: 33%; text-align: center; vertical-align: top; padding: 5px;">
+                    {% if foto_entorno_b64 %}
+                        <img src="{{ foto_entorno_b64 }}" style="width: 100%; max-width: 150px; max-height: 120px; border-radius: 8px; border: 1px solid #ccc;">
+                        <br><span style="font-size: 11px; font-weight: bold; color: #555;">Entorno</span>
+                    {% endif %}
+                </td>
+                
+                <!-- Foto 3: Control Único -->
+                <td style="width: 33%; text-align: center; vertical-align: top; padding: 5px;">
+                    {% if foto_control_b64 %}
+                        <img src="{{ foto_control_b64 }}" style="width: 100%; max-width: 150px; max-height: 120px; border-radius: 8px; border: 1px solid #ccc;">
+                        <br><span style="font-size: 11px; font-weight: bold; color: #555;">Control Único</span>
+                    {% endif %}
+                </td>
+            {% endif %}
+        </tr>
+    </table>
+        <!-- FOOTER CON FECHA DE EMISIÓN -->
+    <div style="margin-top: 50px; text-align: center; font-size: 10px; color: #999; border-top: 1px solid #eee; padding-top: 10px;">
+        Generado automáticamente por SIGVER PWA<br>
+        Fecha y hora de emisión: {{ fecha_actual|date:"d/m/Y H:i" }} hs.
+    </div>
+
+</body>
+</html>

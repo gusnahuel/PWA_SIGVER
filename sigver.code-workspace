@@ -1,0 +1,48 @@
+{
+    "folders": [
+        { "name": "🌎 Raíz", "path": "." },
+        { "name": "🐍 Backend (Django)", "path": "backend" },
+        { "name": "🎨 Frontend (PWA)", "path": "frontend" },
+        { "name": "🐳 Nginx", "path": "nginx" },
+        { "name": "📚 Documentación", "path": "docs" }
+    ],
+    "settings": {
+        "files.exclude": {
+            "**/__pycache__": true,
+            "**/*.pyc": true,
+            "**/node_modules": true,
+            "**/.pytest_cache": true
+        },
+        "python.linting.enabled": true,
+        "python.linting.ruffEnabled": true,
+        "[python]": {
+            "editor.formatOnSave": true,
+            "editor.codeActionsOnSave": {
+                "source.organizeImports": "explicit"
+            }
+        },
+        "[javascript]": {
+            "editor.formatOnSave": true,
+            "editor.tabSize": 4
+        },
+        "[html]": { "editor.tabSize": 4 },
+        "[css]": { "editor.tabSize": 4 },
+        "files.associations": { "*.html": "django-html" },
+        "emmet.includeLanguages": { "django-html": "html" },
+        "editor.rulers": [100]
+    },
+    "extensions": {
+        "recommendations": [
+            "ms-python.python",
+            "ms-python.vscode-pylance",
+            "batisteo.vscode-django",
+            "ms-azuretools.vscode-docker",
+            "ms-vscode-remote.remote-containers",
+            "dbaeumer.vscode-eslint",
+            "bradlc.vscode-tailwindcss",
+            "aaron-bond.better-comments",
+            "eamodio.gitlens",
+            "redhat.vscode-yaml"
+        ]
+    }
+}

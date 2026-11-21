@@ -1,0 +1,26 @@
+{
+    "name": "SIGVER - Sistema de Gestión de Equipos ANDE",
+    "short_name": "SIGVER",
+    "description": "Verificación en campo de equipos telecomandados y reguladores de tensión de ANDE",
+    "start_url": "/",
+    "scope": "/",
+    "display": "standalone",
+    "orientation": "portrait-primary",
+    "background_color": "#002f6c",
+    "theme_color": "#002f6c",
+    "lang": "es-PY",
+    "icons": [
+        {
+            "src": "/static/icons/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/static/icons/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ]
+}
