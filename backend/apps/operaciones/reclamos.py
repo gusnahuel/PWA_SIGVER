@@ -20,14 +20,13 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import timedelta
 
-from django.contrib.gis.db.models.functions import Distance
 from django.db import transaction
 from django.db.models.fields.files import FieldFile
 from django.utils import timezone
 
 from apps.inventario.models import Componente, EquipoETC, Sitio
 from apps.usuarios.permisos import agencias_del_usuario
-from . import estado_red
+from . import estado_red, geo
 from .models import HistorialReclamo, Reclamo
 
 ESTADOS_ACTIVOS = ('ABIERTO', 'ASIGNADO', 'EN_PROCESO')
@@ -73,10 +72,9 @@ CAMPOS_TECNICO = frozenset({
     'ubicacion_evidencia', 'precision_evidencia_m',
 })
 
-# Distancia entre el técnico y el equipo al enviar la evidencia (mismos
-# umbrales que la verificación de reguladores en la PWA)
-DISTANCIA_EN_EL_LUGAR_M = 50
-DISTANCIA_CERCA_M = 300
+# Distancia entre el técnico y el equipo al enviar la evidencia (ver geo.py)
+DISTANCIA_EN_EL_LUGAR_M = geo.EN_EL_LUGAR_M
+DISTANCIA_CERCA_M = geo.CERCA_M
 CAMPOS_SUPERVISOR = frozenset({
     'estado', 'prioridad', 'agencia_responsable', 'responsable_asignado', 'requiere_intervencion',
     'descripcion', 'tipo_reclamo', 'resultado',
@@ -297,27 +295,13 @@ def _validar_asignacion(reclamo, usuario, rol, plan, estado, ahora):
 def distancia_al_equipo(reclamo, punto):
     """Metros entre el punto y el equipo del reclamo (None si el equipo no tiene ubicación)."""
     if reclamo.equipo_etc_id:
-        qs, campo = EquipoETC.objects.filter(pk=reclamo.equipo_etc_id), 'ubicacion'
-    elif reclamo.componente_id:
-        qs, campo = Sitio.objects.filter(componentes__id=reclamo.componente_id), 'ubicacion_base'
-    else:
-        return None
-    # En columnas "geography" PostGIS mide sobre el elipsoide y devuelve metros
-    distancia = (qs.exclude(**{f'{campo}__isnull': True})
-                 .annotate(d=Distance(campo, punto)).values_list('d', flat=True).first())
-    return round(distancia.m) if distancia is not None else None
+        return geo.distancia_m(EquipoETC.objects.filter(pk=reclamo.equipo_etc_id), 'ubicacion', punto)
+    if reclamo.componente_id:
+        return geo.distancia_m(Sitio.objects.filter(componentes__id=reclamo.componente_id), 'ubicacion_base', punto)
+    return None
 
 
-def texto_distancia(metros):
-    """'En el lugar (12 m)', 'Cerca (180 m)' o 'Lejos (2,3 km)'."""
-    if metros is None:
-        return None
-    medida = f'{metros} m' if metros < 1000 else f'{metros / 1000:.1f} km'.replace('.', ',')
-    if metros <= DISTANCIA_EN_EL_LUGAR_M:
-        return f'En el lugar ({medida})'
-    if metros <= DISTANCIA_CERCA_M:
-        return f'Cerca ({medida})'
-    return f'Lejos ({medida})'
+texto_distancia = geo.texto_distancia
 
 
 def _validar_transicion(reclamo, usuario, rol, plan, desde, hacia, comentario, ahora):
@@ -515,6 +499,9 @@ def registrar_falla(usuario, verificacion):
 
     agencia = agencia_equipo or verificacion.agencia_responsable
     lineas = [f'Generado por la verificación de {tipo} {verificacion.id_verificacion}.']
+    obligatorio = getattr(verificacion, '_reclamo_obligatorio', None)
+    if obligatorio:
+        lineas.append(f'Reclamo obligatorio por {obligatorio} (prioridad alta como mínimo).')
     if agencia_equipo is None and agencia is not None:
         lineas.append(f'El equipo no tiene agencia cargada: se tomó la del técnico ({agencia}).')
     reclamo = crear(

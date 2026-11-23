@@ -2,10 +2,10 @@
  * SIGVER - Trabajo sin conexión: cola de verificaciones (IndexedDB), contadores
  * de pendientes, estado de la conexión y sincronización automática.
  */
-import { guardarVerificacionOffline, obtenerPendientes, eliminarDeOutbox } from './db.js?v=116';
-import { fetchConTimeout, describirErrorServidor } from './api.js?v=116';
-import { ponerBadge, registrarAcciones, showToast } from './ui.js?v=116';
-import { estado } from './estado.js?v=116';
+import { guardarVerificacionOffline, obtenerPendientes, eliminarDeOutbox } from './db.js?v=119';
+import { fetchConTimeout, describirErrorServidor } from './api.js?v=119';
+import { ponerBadge, registrarAcciones, showToast } from './ui.js?v=119';
+import { estado } from './estado.js?v=119';
 
 let isSyncing = false;
 let cantidadPendientes = 0;
@@ -96,6 +96,9 @@ function armarFormData(payload) {
     formData.append('prioridad', payload.prioridad || '');
     if (payload.fallas) payload.fallas.forEach((id) => formData.append('fallas', id));
     if (payload.foto) formData.append('foto', payload.foto);
+    ['gps_latitud', 'gps_longitud', 'gps_precision_m'].forEach((campo) => {
+        if (payload[campo] !== undefined && payload[campo] !== null) formData.append(campo, payload[campo]);
+    });
     return { endpoint: '/api/operaciones/verificaciones-etc/', formData };
 }
 
@@ -183,7 +186,22 @@ function actualizarEstadoConexion() {
     actualizarPillConexion();
 }
 
+// Sin almacenamiento persistente, Android puede vaciar IndexedDB cuando le
+// falta espacio y se perderían las verificaciones guardadas sin señal.
+// Chrome lo concede solo a la app instalada o muy usada; si lo niega, se vuelve
+// a pedir en el próximo inicio.
+async function pedirAlmacenamientoPersistente() {
+    try {
+        if (!navigator.storage?.persist || await navigator.storage.persisted()) return;
+        const concedido = await navigator.storage.persist();
+        console.info('[Sync] Almacenamiento persistente:', concedido ? 'concedido' : 'no concedido');
+    } catch (err) {
+        console.warn('[Sync] No se pudo pedir almacenamiento persistente:', err);
+    }
+}
+
 export function iniciarSincronizacion() {
+    pedirAlmacenamientoPersistente();
     window.addEventListener('online', actualizarEstadoConexion);
     window.addEventListener('offline', actualizarEstadoConexion);
     actualizarEstadoConexion();

@@ -18,16 +18,16 @@
  *   sync.js        cola offline y sincronización automática
  *   actualizaciones.js  service worker y aviso de versión nueva
  */
-import { cerrarMenu, cerrarPaneles, iniciarSegmentados, marcarNav, registrarAcciones, setStatus } from './ui.js?v=116';
-import { haySesion, ocultarLogin, restaurarSesion } from './sesion.js?v=116';
-import { iniciarMapa } from './mapa.js?v=116';
-import { cargarFallas } from './verificacion-etc.js?v=116';
-import { cargarPuntosTermografia } from './mediciones.js?v=116';
-import { iniciarAvisoReclamos } from './reclamos.js?v=116';
-import { actualizarContadorPendientes, iniciarSincronizacion } from './sync.js?v=116';
-import { registrarServiceWorker } from './actualizaciones.js?v=116';
-import './busqueda.js?v=116';
-import './verificacion-regulador.js?v=116';
+import { cerrarMenu, cerrarPaneles, iniciarSegmentados, marcarNav, registrarAcciones, setStatus } from './ui.js?v=119';
+import { haySesion, ocultarLogin, restaurarSesion } from './sesion.js?v=119';
+import { iniciarMapa } from './mapa.js?v=119';
+import { cargarFallas } from './verificacion-etc.js?v=119';
+import { cargarPuntosTermografia } from './mediciones.js?v=119';
+import { iniciarAvisoReclamos } from './reclamos.js?v=119';
+import { actualizarContadorPendientes, iniciarSincronizacion } from './sync.js?v=119';
+import { registrarServiceWorker } from './actualizaciones.js?v=119';
+import './busqueda.js?v=119';
+import './verificacion-regulador.js?v=119';
 
 registrarAcciones({
     'ir-mapa': () => {

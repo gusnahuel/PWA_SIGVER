@@ -21,14 +21,14 @@
     --text-main: #0f172a;
     --text-body: #334155;
     --text-muted: #475569;
-    --text-faint: #64748b;
+    --text-faint: #5b6779;      /* ≥4.6:1 sobre todos los fondos claros (antes #64748b: 4.3) */
     --border-color: #e2e8f0;
     --border-strong: #cbd5e1;
 
     /* Estados (reservados: siempre acompañados de texto o ícono) */
     --success: #047857;
     --success-soft: #d1fae5;
-    --warning: #b45309;
+    --warning: #a34a07;         /* ≥5.1:1 sobre --warning-soft (antes #b45309: 4.4) */
     --warning-soft: #ffedd5;
     --danger: #b91c1c;
     --danger-soft: #fee2e2;

@@ -49,6 +49,36 @@ def filtrar_reclamos_por_rol(user, qs):
     return qs.filter(filtro)
 
 
+def filtrar_verificaciones_por_rol(user, qs, prefijo=''):
+    """
+    - admin_eam / superusuario / consulta: todas.
+    - supervisor_zona: las de sus agencias (y las que no tienen agencia).
+    - tecnico_campo: solo las propias.
+    `prefijo` permite filtrar modelos hijos (p. ej. 'verificacion__' para mediciones).
+    """
+    if user.es_admin_eam or user.rol == 'consulta':
+        return qs
+    if user.es_supervisor:
+        return qs.filter(
+            Q(**{f'{prefijo}agencia_responsable_id__in': agencias_del_usuario(user)})
+            | Q(**{f'{prefijo}agencia_responsable__isnull': True})
+        )
+    personal = getattr(user, 'personal', None)
+    if personal is None:
+        return qs.none()
+    return qs.filter(**{f'{prefijo}responsable': personal})
+
+
+def filtrar_personal_por_rol(user, qs):
+    """Personal visible: todo para admin/consulta, el de sus agencias para el supervisor, uno mismo para el técnico."""
+    if user.es_admin_eam or user.rol == 'consulta':
+        return qs
+    if user.es_supervisor:
+        return qs.filter(Q(agencia_id__in=agencias_del_usuario(user)) | Q(agencia__isnull=True))
+    personal = getattr(user, 'personal', None)
+    return qs.filter(pk=personal.pk) if personal is not None else qs.none()
+
+
 # =====================================================
 # ADMIN DE DJANGO: grupo de supervisores e inmutabilidad
 # =====================================================

@@ -19,7 +19,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.inventario.models import Personal
-from apps.usuarios.permisos import SoloLecturaParaConsulta, filtrar_reclamos_por_rol
+from apps.usuarios.permisos import (
+    SoloLecturaParaConsulta, filtrar_personal_por_rol, filtrar_reclamos_por_rol, filtrar_verificaciones_por_rol,
+)
 from . import reclamos
 from .models import (
     PuntoInspeccionTermografia, Reclamo, TipoFallaETC, Verificacion, VerificacionETC,
@@ -42,6 +44,10 @@ class SincronizacionIdempotenteMixin:
     quitar de su cola sin perder datos.
     """
     http_method_names = ['get', 'post', 'head', 'options']
+
+    def get_queryset(self):
+        # Mínimo privilegio: el técnico ve las suyas, el supervisor las de sus agencias
+        return filtrar_verificaciones_por_rol(self.request.user, super().get_queryset())
 
     def create(self, request, *args, **kwargs):
         client_uuid = request.data.get('client_uuid')
@@ -91,6 +97,9 @@ class PersonalViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Personal.objects.filter(activo=True)
     serializer_class = PersonalSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return filtrar_personal_por_rol(self.request.user, super().get_queryset())
 
 
 class PuntoInspeccionTermografiaViewSet(viewsets.ReadOnlyModelViewSet):
@@ -176,15 +185,18 @@ def generar_informe_pdf(request, tipo, id):
     """Informe PDF de una verificación. Solo accesible desde el admin (usuarios staff)."""
     from weasyprint import HTML  # import diferido: carga pesada
 
+    # Mismo alcance por rol que el admin: un supervisor no descarga informes de otras zonas
     if tipo == 'etc':
-        verificacion = get_object_or_404(VerificacionETC, id=id)
+        verificacion = get_object_or_404(
+            filtrar_verificaciones_por_rol(request.user, VerificacionETC.objects.all()), id=id)
         contexto = {
             'verificacion': verificacion,
             'tipo': 'ETC',
             'foto_b64': imagen_a_base64(verificacion.foto),
         }
     elif tipo == 'regulador':
-        verificacion = get_object_or_404(Verificacion, id=id)
+        verificacion = get_object_or_404(
+            filtrar_verificaciones_por_rol(request.user, Verificacion.objects.all()), id=id)
         contexto = {
             'verificacion': verificacion,
             'tipo': 'REGULADOR',

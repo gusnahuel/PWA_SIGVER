@@ -2,9 +2,9 @@
  * SIGVER - Mediciones del formulario de reguladores (paso 3):
  * termografías y ensayos de puesta a tierra (PAT), con alta, edición y borrado.
  */
-import { fetchConToken } from './api.js?v=116';
-import { escapeHtml, generarIdLocal } from './util.js?v=116';
-import { registrarAcciones } from './ui.js?v=116';
+import { fetchConToken } from './api.js?v=119';
+import { escapeHtml, generarIdLocal } from './util.js?v=119';
+import { abrirModal, cerrarModal, registrarAcciones } from './ui.js?v=119';
 
 let termografias = [];
 let indiceEdicionTermografia = -1; // -1 = agregando una nueva
@@ -24,8 +24,8 @@ export function reiniciarMediciones() {
     actualizarListaEnsayosPat();
 }
 
-const mostrarModal = (id) => { document.getElementById(id).style.display = 'flex'; };
-const ocultarModal = (id) => { document.getElementById(id).style.display = 'none'; };
+const mostrarModal = (id) => abrirModal(id);
+const ocultarModal = (id) => cerrarModal(id);
 
 // ==========================================
 // Termografía

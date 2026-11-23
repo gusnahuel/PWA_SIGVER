@@ -5,7 +5,7 @@ No son indicadores (esos están en «Indicadores de reclamos»): son tareas pend
 from django import template
 from django.urls import reverse
 
-from apps.usuarios.permisos import filtrar_reclamos_por_rol
+from apps.usuarios.permisos import filtrar_reclamos_por_rol, filtrar_verificaciones_por_rol
 
 from .. import indicadores
 from ..admin import filtrar_bandeja
@@ -41,7 +41,8 @@ def panel_supervisor(context):
 
     recientes = []
     if user.has_perm('operaciones.view_verificacion'):
-        for v in Verificacion.objects.select_related('sitio', 'responsable').order_by('-fecha_verificacion')[:6]:
+        regs = filtrar_verificaciones_por_rol(user, Verificacion.objects.select_related('sitio', 'responsable'))
+        for v in regs.order_by('-fecha_verificacion')[:6]:
             recientes.append({
                 'tipo': 'Regulador', 'codigo': v.sitio.id_sitio, 'fecha': v.fecha_verificacion,
                 'responsable': v.responsable.nombre_completo,
@@ -50,7 +51,8 @@ def panel_supervisor(context):
                 'url': reverse('admin:operaciones_verificacion_change', args=[v.pk]),
             })
     if user.has_perm('operaciones.view_verificacionetc'):
-        for v in VerificacionETC.objects.select_related('equipo_etc', 'responsable').order_by('-fecha_verificacion')[:6]:
+        etcs = filtrar_verificaciones_por_rol(user, VerificacionETC.objects.select_related('equipo_etc', 'responsable'))
+        for v in etcs.order_by('-fecha_verificacion')[:6]:
             recientes.append({
                 'tipo': 'ETC', 'codigo': v.equipo_etc.nro_equipo, 'fecha': v.fecha_verificacion,
                 'responsable': v.responsable.nombre_completo,

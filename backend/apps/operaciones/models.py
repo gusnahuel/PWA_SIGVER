@@ -75,6 +75,12 @@ class Verificacion(models.Model):
 
     # Ubicación capturada
     ubicacion_capturada = gis_models.PointField(geography=True, null=True, blank=True)
+    precision_gps_m = models.PositiveIntegerField(
+        null=True, blank=True, help_text='Precisión informada por el GPS del celular',
+    )
+    distancia_equipo_m = models.PositiveIntegerField(
+        null=True, blank=True, help_text='Distancia al equipo, calculada por el servidor',
+    )
     COINCIDE = [
         ('SI', 'Sí'),
         ('APROXIMADA', 'Aproximada'),
@@ -177,6 +183,12 @@ class VerificacionETC(models.Model):
     )
 
     ubicacion_capturada = gis_models.PointField(geography=True, null=True, blank=True)
+    precision_gps_m = models.PositiveIntegerField(
+        null=True, blank=True, help_text='Precisión informada por el GPS del celular',
+    )
+    distancia_equipo_m = models.PositiveIntegerField(
+        null=True, blank=True, help_text='Distancia al equipo, calculada por el servidor',
+    )
 
     tiene_inconveniente = models.BooleanField(default=False)
     fallas = models.ManyToManyField(

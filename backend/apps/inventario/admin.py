@@ -5,6 +5,8 @@ from django.contrib import admin
 from django.contrib.gis.admin import GISModelAdmin
 from django.utils.html import format_html
 
+from apps.usuarios.permisos import filtrar_personal_por_rol
+
 from .models import (
     SeccionRegional, Agencia, Personal,
     SubEstacion, Alimentador, Sitio,
@@ -51,6 +53,10 @@ class PersonalAdmin(admin.ModelAdmin):
     @admin.display(boolean=True, description='Puede ingresar')
     def puede_ingresar(self, obj):
         return obj.tiene_acceso
+
+    def get_queryset(self, request):
+        # El supervisor administra el personal de sus agencias
+        return filtrar_personal_por_rol(request.user, super().get_queryset(request))
 
     def get_readonly_fields(self, request, obj=None):
         # Vincular una ficha con un usuario da acceso al sistema: solo admin_eam

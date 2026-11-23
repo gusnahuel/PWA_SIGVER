@@ -2,14 +2,15 @@
 SIGVER - Serializers de Operaciones
 """
 import json
+from datetime import timedelta
 
-from django.contrib.gis.geos import Point
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import serializers
 from rest_framework_gis.serializers import GeometryField
 
-from apps.inventario.models import Personal, Sitio
-from . import estado_red, reclamos
+from apps.inventario.models import EquipoETC, Personal, Sitio
+from . import estado_red, geo, reclamos
 from .models import (
     EnsayoPAT, HistorialReclamo, LecturaPAT, MedicionTermografia, PuntoInspeccionTermografia,
     Reclamo, TipoFallaETC, Verificacion, VerificacionETC,
@@ -50,6 +51,7 @@ class ResponsableDesdeUsuarioMixin:
     Asigna el responsable a partir del usuario autenticado, para que nadie
     pueda registrar verificaciones a nombre de otra persona.
     Los supervisores/administradores pueden indicarlo explícitamente.
+    La agencia es siempre la del responsable (no la elige el celular).
     """
 
     def _resolver_responsable(self, attrs):
@@ -66,26 +68,94 @@ class ResponsableDesdeUsuarioMixin:
                 'responsable': 'Tu usuario no tiene una ficha de Personal asociada. '
                                'Pedí al administrador que la vincule.'
             })
-        if not attrs.get('agencia_responsable'):
-            attrs['agencia_responsable'] = attrs['responsable'].agencia
+        attrs['agencia_responsable'] = attrs['responsable'].agencia
         return attrs
 
 
-class VerificacionETCSerializer(ResponsableDesdeUsuarioMixin, serializers.ModelSerializer):
-    ubicacion_capturada = GeometryField(required=False, allow_null=True)
+class DatosDeCampoMixin(serializers.Serializer):
+    """
+    Lo que el servidor controla de toda verificación que llega del celular:
+    - la fecha (el reloj del celular puede estar mal),
+    - el GPS: arma el punto y, al guardar, mide la distancia al equipo; con
+      GPS, «ubicación coincide» lo decide esa distancia y no el técnico,
+    - la coherencia reclamo/prioridad.
+    """
+    # Una verificación puede esperar varios días en la cola sin señal, pero no meses
+    ANTIGUEDAD_MAXIMA = timedelta(days=60)
+    TOLERANCIA_RELOJ = timedelta(minutes=10)
+
+    gps_latitud = serializers.FloatField(write_only=True, required=False, min_value=-90, max_value=90)
+    gps_longitud = serializers.FloatField(write_only=True, required=False, min_value=-180, max_value=180)
+    gps_precision_m = serializers.FloatField(write_only=True, required=False, min_value=0)
+
+    def _validar_fecha(self, attrs):
+        fecha = attrs.get('fecha_verificacion')
+        ahora = timezone.now()
+        if fecha and fecha > ahora + self.TOLERANCIA_RELOJ:
+            raise serializers.ValidationError({
+                'fecha_verificacion': 'La fecha es posterior a la actual: revisá la fecha y hora del celular.'})
+        if fecha and fecha < ahora - self.ANTIGUEDAD_MAXIMA:
+            raise serializers.ValidationError({
+                'fecha_verificacion': 'La verificación tiene más de 60 días: revisá la fecha y hora del celular.'})
+
+    def _resolver_gps(self, attrs):
+        lat, lng = attrs.pop('gps_latitud', None), attrs.pop('gps_longitud', None)
+        precision = attrs.pop('gps_precision_m', None)
+        if (lat is None) != (lng is None):
+            raise serializers.ValidationError({'gps_latitud': 'Enviá latitud y longitud juntas.'})
+        if lat is not None:
+            attrs['ubicacion_capturada'] = geo.punto_gps(lat, lng)
+            attrs['precision_gps_m'] = round(precision) if precision is not None else None
+
+    @staticmethod
+    def _exigir_reclamo(attrs, motivo):
+        """Falla grave: el reclamo es obligatorio, con prioridad alta como mínimo."""
+        attrs['requiere_reclamo'] = True
+        if reclamos.ORDEN_PRIORIDAD.get(attrs.get('prioridad') or 'BAJA', 1) < reclamos.ORDEN_PRIORIDAD['ALTA']:
+            attrs['prioridad'] = 'ALTA'
+        attrs['_reclamo_obligatorio'] = motivo
+
+    @staticmethod
+    def _normalizar_reclamo(attrs):
+        if not attrs.get('requiere_reclamo'):
+            attrs['prioridad'] = ''
+
+    def _guardar_distancia(self, verificacion, queryset, campo):
+        metros = geo.distancia_m(queryset, campo, verificacion.ubicacion_capturada)
+        if metros is not None:
+            verificacion.distancia_equipo_m = metros
+            verificacion.ubicacion_coincide = geo.coincide(metros)
+            verificacion.save(update_fields=['distancia_equipo_m', 'ubicacion_coincide'])
+
+
+class VerificacionETCSerializer(ResponsableDesdeUsuarioMixin, DatosDeCampoMixin, serializers.ModelSerializer):
+    ubicacion_capturada = GeometryField(read_only=True)
     responsable = ResponsableField()
 
     class Meta:
         model = VerificacionETC
         fields = '__all__'
-        read_only_fields = ('synced_at',)
+        read_only_fields = ('synced_at', 'agencia_responsable', 'precision_gps_m', 'distancia_equipo_m')
 
     def validate(self, attrs):
+        self._validar_fecha(attrs)
+        self._resolver_gps(attrs)
+        fallas = attrs.get('fallas') or []
+        if fallas:
+            attrs['tiene_inconveniente'] = True   # con fallas marcadas hay inconveniente
+        criticas = [f for f in fallas if f.gravedad == 'CRITICA']
+        if criticas:
+            self._exigir_reclamo(attrs, 'falla de gravedad crítica: '
+                                 + ', '.join(f'F{f.numero:02d}' for f in criticas))
+        self._normalizar_reclamo(attrs)
         return self._resolver_responsable(attrs)
 
     @transaction.atomic
     def create(self, validated_data):
+        obligatorio = validated_data.pop('_reclamo_obligatorio', None)
         verificacion = super().create(validated_data)
+        verificacion._reclamo_obligatorio = obligatorio
+        self._guardar_distancia(verificacion, EquipoETC.objects.filter(pk=verificacion.equipo_etc_id), 'ubicacion')
 
         # Primero el reclamo (nuevo o el que ya estaba abierto) y después el
         # estado del equipo en el mapa, que tiene en cuenta los reclamos abiertos
@@ -166,12 +236,12 @@ class ReclamoSerializer(serializers.ModelSerializer):
         if (lat is None) != (lng is None):
             raise serializers.ValidationError({'gps_latitud': 'Enviá latitud y longitud juntas.'})
         if lat is not None:
-            attrs['ubicacion_evidencia'] = Point(lng, lat, srid=4326)
+            attrs['ubicacion_evidencia'] = geo.punto_gps(lat, lng)
             attrs['precision_evidencia_m'] = round(precision) if precision is not None else None
         return attrs
 
 
-class VerificacionSerializer(ResponsableDesdeUsuarioMixin, serializers.ModelSerializer):
+class VerificacionSerializer(ResponsableDesdeUsuarioMixin, DatosDeCampoMixin, serializers.ModelSerializer):
     sitio = serializers.PrimaryKeyRelatedField(queryset=Sitio.objects.all(), required=False)
     responsable = ResponsableField()
     mediciones_termografia = MedicionTermografiaSerializer(many=True, required=False)
@@ -182,7 +252,10 @@ class VerificacionSerializer(ResponsableDesdeUsuarioMixin, serializers.ModelSeri
     class Meta:
         model = Verificacion
         fields = '__all__'
-        read_only_fields = ('synced_at',)
+        read_only_fields = ('synced_at', 'agencia_responsable', 'precision_gps_m', 'distancia_equipo_m')
+
+    ubicacion_capturada = GeometryField(read_only=True)
+    ESTADOS_CON_RECLAMO = {'CRITICO': 'sitio en estado crítico', 'FUERA_SERVICIO': 'sitio fuera de servicio'}
 
     def to_internal_value(self, data):
         """
@@ -210,14 +283,22 @@ class VerificacionSerializer(ResponsableDesdeUsuarioMixin, serializers.ModelSeri
             if not componente:
                 raise serializers.ValidationError({'sitio': 'Debe enviar sitio o componente.'})
             attrs['sitio'] = componente.sitio
+        self._validar_fecha(attrs)
+        self._resolver_gps(attrs)
+        if attrs.get('estado_sitio') in self.ESTADOS_CON_RECLAMO:
+            self._exigir_reclamo(attrs, self.ESTADOS_CON_RECLAMO[attrs['estado_sitio']])
+        self._normalizar_reclamo(attrs)
         return self._resolver_responsable(attrs)
 
     @transaction.atomic
     def create(self, validated_data):
         mediciones_data = validated_data.pop('mediciones_termografia', [])
         ensayos_data = validated_data.pop('ensayos_pat', [])
+        obligatorio = validated_data.pop('_reclamo_obligatorio', None)
 
         verificacion = super().create(validated_data)
+        verificacion._reclamo_obligatorio = obligatorio
+        self._guardar_distancia(verificacion, Sitio.objects.filter(pk=verificacion.sitio_id), 'ubicacion_base')
 
         for med_data in mediciones_data:
             MedicionTermografia.objects.create(

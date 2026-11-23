@@ -1,10 +1,10 @@
 /**
  * SIGVER - Sesión: login, datos del usuario en el menú y cierre de sesión.
  */
-import { estado } from './estado.js?v=116';
-import { iniciales } from './util.js?v=116';
-import { registrarAcciones, showToast } from './ui.js?v=116';
-import { obtenerPendientesPropios } from './sync.js?v=116';
+import { estado } from './estado.js?v=119';
+import { iniciales } from './util.js?v=119';
+import { abrirModal, cerrarModal, registrarAcciones, showToast } from './ui.js?v=119';
+import { obtenerPendientesPropios } from './sync.js?v=119';
 
 const ROLES_GESTION = ['supervisor_zona', 'admin_eam'];
 const NOMBRE_ROL = {
@@ -238,12 +238,12 @@ async function abrirModalLogout() {
         texto.textContent = 'Vas a tener que ingresar tu usuario y contraseña de nuevo.';
         confirmar.textContent = 'Cerrar sesión';
     }
-    document.getElementById('logout-modal').style.display = 'flex';
+    abrirModal('logout-modal');
 }
 
 registrarAcciones({
     'abrir-logout': abrirModalLogout,
-    'cancelar-logout': () => { document.getElementById('logout-modal').style.display = 'none'; },
+    'cancelar-logout': () => cerrarModal('logout-modal'),
     'confirmar-logout': (boton) => {
         boton.disabled = true;
         boton.textContent = 'Cerrando...';

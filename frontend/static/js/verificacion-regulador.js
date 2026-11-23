@@ -2,16 +2,17 @@
  * SIGVER - Verificación de regulador: formulario en 4 pasos (datos y GPS,
  * fotos, mediciones, reclamo/resumen). Sin señal se guarda en la cola offline.
  */
-import { guardarVerificacionOffline } from './db.js?v=116';
-import { estado } from './estado.js?v=116';
-import { fetchConTimeout, esErrorDeRed, describirErrorServidor } from './api.js?v=116';
-import { calcularDistanciaMetros, comprimirImagen, escapeHtml, generarIdLocal, generarUUID } from './util.js?v=116';
+import { guardarVerificacionOffline } from './db.js?v=119';
+import { datosGps, seguirUbicacion, sugerirCoincidencia } from './gps.js?v=119';
+import { estado } from './estado.js?v=119';
+import { fetchConTimeout, esErrorDeRed, describirErrorServidor } from './api.js?v=119';
+import { comprimirImagen, escapeHtml, generarIdLocal, generarUUID } from './util.js?v=119';
 import {
     abrirPanel, avisarSoloCelular, cerrarPanel, cerrarPopupsMapa, esEscritorio,
     repintarSegmentados, showToast,
-} from './ui.js?v=116';
-import { actualizarContadorPendientes } from './sync.js?v=116';
-import { obtenerEnsayosPat, obtenerTermografias, reiniciarMediciones } from './mediciones.js?v=116';
+} from './ui.js?v=119';
+import { actualizarContadorPendientes } from './sync.js?v=119';
+import { obtenerEnsayosPat, obtenerTermografias, reiniciarMediciones } from './mediciones.js?v=119';
 
 const TOTAL_PASOS = 4;
 const FOTOS_REGULADOR = ['reg-foto-frontal', 'reg-foto-entorno', 'reg-foto-control'];
@@ -84,41 +85,20 @@ document.getElementById('reg-req-reclamo').addEventListener('change', (e) => {
 
 // ==========================================
 // GPS: distancia al sitio y sugerencia de "ubicación coincide"
+// (con GPS, el servidor recalcula y decide; ver gps.js)
 // ==========================================
+let posicionActual = () => null;
+
 function medirDistanciaAlSitio(sitio) {
-    const card = document.getElementById('reg-gps-card');
-    const titulo = document.getElementById('reg-gps-titulo');
-    const sub = document.getElementById('reg-gps-sub');
-    card.classList.remove('ok', 'lejos');
-    titulo.textContent = 'Buscando tu ubicación...';
-    sub.textContent = 'Activá el GPS para comparar con el equipo';
-
-    if (!navigator.geolocation || !sitio?.geometry) {
-        titulo.textContent = 'Ubicación no disponible';
-        sub.textContent = 'Elegí manualmente si la ubicación coincide';
-        return;
-    }
-    const [lngSitio, latSitio] = sitio.geometry.coordinates;
-    navigator.geolocation.getCurrentPosition((pos) => {
-        const metros = calcularDistanciaMetros(pos.coords.latitude, pos.coords.longitude, latSitio, lngSitio);
-        const sugerido = metros <= 50 ? 'SI' : metros <= 300 ? 'APROXIMADA' : 'NO';
-        const texto = { SI: 'coincide', APROXIMADA: 'aproximada', NO: 'no coincide' }[sugerido];
-        titulo.textContent = metros < 1000
-            ? `Estás a ${Math.round(metros)} m del equipo`
-            : `Estás a ${(metros / 1000).toFixed(1).replace('.', ',')} km del equipo`;
-        sub.textContent = `GPS ±${Math.round(pos.coords.accuracy)} m · ubicación ${texto} (sugerido)`;
-        card.classList.add(sugerido === 'NO' ? 'lejos' : 'ok');
-
+    posicionActual = seguirUbicacion('reg', sitio, (posicion, metros) => {
+        if (metros === null) return;
         const select = document.getElementById('reg-ubicacion-coincide');
         if (!select.dataset.tocado) { // no pisar lo que eligió el técnico
-            select.value = sugerido;
+            select.value = sugerirCoincidencia(metros);
             select.dispatchEvent(new Event('change'));
             delete select.dataset.tocado;
         }
-    }, () => {
-        titulo.textContent = 'No se pudo obtener el GPS';
-        sub.textContent = 'Revisá los permisos y elegí manualmente';
-    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 });
+    });
 }
 
 // ==========================================
@@ -229,7 +209,8 @@ document.getElementById('form-regulador').addEventListener('submit', async (e) =
         observaciones: valor('reg-observaciones'),
         ubicacion_coincide: valor('reg-ubicacion-coincide'),
         requiere_reclamo: requiereReclamo,
-        prioridad: requiereReclamo ? valor('reg-prioridad') : ''
+        prioridad: requiereReclamo ? valor('reg-prioridad') : '',
+        ...datosGps(posicionActual()),
     };
     const termografias = obtenerTermografias();
     const ensayos = obtenerEnsayosPat();

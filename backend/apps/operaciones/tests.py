@@ -836,6 +836,108 @@ class IndicadoresTests(BaseSigverTest):
         self.assertEqual(texto_duracion(None), '—')
 
 
+class VerificacionDatosDeCampoTests(BaseSigverTest):
+    """Auditoría: alcance por rol, datos que decide el servidor y coherencia."""
+    url_etc = '/api/operaciones/verificaciones-etc/'
+    url_reg = '/api/operaciones/verificaciones/'
+
+    def etc(self, user=None, **extra):
+        datos = {
+            'id_verificacion': f'VERIF-{uuid.uuid4().hex[:8]}', 'client_uuid': str(uuid.uuid4()),
+            'equipo_etc': str(self.equipo.id), 'fecha_verificacion': timezone.now().isoformat(),
+            'tiene_inconveniente': 'false', 'observaciones': '', 'requiere_reclamo': 'false', 'prioridad': '',
+        }
+        datos.update(extra)
+        return self.cliente(user or self.tecnico).post(self.url_etc, datos, format='multipart')
+
+    def ids(self, res):
+        return {v['id_verificacion'] for v in res.data['results']}
+
+    # --- Alcance por rol ---
+    def test_cada_rol_ve_solo_lo_suyo(self):
+        propia = self.etc().data['id_verificacion']
+        ajena = self.etc(self.otro_tecnico).data['id_verificacion']   # técnico de otra agencia
+        self.assertEqual(self.ids(self.cliente(self.tecnico).get(self.url_etc)), {propia})
+        self.assertEqual(self.ids(self.cliente(self.supervisor).get(self.url_etc)), {propia})
+        self.assertEqual(self.ids(self.cliente(self.consulta).get(self.url_etc)), {propia, ajena})
+        self.assertEqual(self.cliente(self.sin_personal).get(self.url_etc).data['results'], [])
+
+    def test_personal_solo_el_propio_para_el_tecnico(self):
+        res = self.cliente(self.tecnico).get('/api/operaciones/personal/')
+        self.assertEqual([p['id_personal'] for p in res.data['results']], ['PER-T1'])
+        res = self.cliente(self.supervisor).get('/api/operaciones/personal/')
+        self.assertNotIn('PER-T2', [p['id_personal'] for p in res.data['results']])
+
+    def test_pdf_de_otra_zona_no_se_descarga(self):
+        ajena = VerificacionETC.objects.get(client_uuid=self.etc(self.otro_tecnico).data['client_uuid'])
+        self.client.force_login(self.supervisor)
+        self.assertEqual(self.client.get(reverse('generar_pdf', args=['etc', ajena.id])).status_code, 404)
+
+    # --- Lo decide el servidor ---
+    def test_la_agencia_es_la_del_tecnico(self):
+        res = self.etc(agencia_responsable=str(self.otra_agencia.id))
+        self.assertEqual(res.status_code, 201, res.data)
+        self.assertEqual(VerificacionETC.objects.get(client_uuid=res.data['client_uuid']).agencia_responsable,
+                         self.agencia)
+
+    def test_fecha_del_celular_adelantada_o_muy_vieja(self):
+        futura = (timezone.now() + timezone.timedelta(hours=2)).isoformat()
+        res = self.etc(fecha_verificacion=futura)
+        self.assertEqual(res.status_code, 400)
+        self.assertIn('fecha_verificacion', res.data)
+        vieja = (timezone.now() - timezone.timedelta(days=90)).isoformat()
+        self.assertEqual(self.etc(fecha_verificacion=vieja).status_code, 400)
+        # unos días en la cola sin señal es normal
+        self.assertEqual(self.etc(fecha_verificacion=(timezone.now() - timezone.timedelta(days=5)).isoformat())
+                         .status_code, 201)
+
+    def test_gps_cerca_decide_que_coincide(self):
+        res = self.etc(gps_latitud='-27.1002', gps_longitud='-56.2', gps_precision_m='6.7', ubicacion_coincide='NO')
+        self.assertEqual(res.status_code, 201, res.data)
+        v = VerificacionETC.objects.get(client_uuid=res.data['client_uuid'])
+        self.assertLessEqual(v.distancia_equipo_m, 30)
+        self.assertEqual((v.ubicacion_coincide, v.precision_gps_m), ('SI', 7))
+        self.assertIsNotNone(v.ubicacion_capturada)
+
+    def test_gps_lejos_no_coincide_aunque_diga_que_si(self):
+        datos = self.datos_regulador(gps_latitud='-27.2', gps_longitud='-56.2', ubicacion_coincide='SI')
+        res = self.cliente(self.tecnico).post(self.url_reg, datos, format='multipart')
+        self.assertEqual(res.status_code, 201, res.data)
+        v = Verificacion.objects.get(client_uuid=datos['client_uuid'])
+        self.assertEqual(v.ubicacion_coincide, 'NO')
+        self.assertAlmostEqual(v.distancia_equipo_m, 11077, delta=50)
+
+    def test_sin_gps_queda_lo_declarado(self):
+        res = self.etc(ubicacion_coincide='APROXIMADA')
+        v = VerificacionETC.objects.get(client_uuid=res.data['client_uuid'])
+        self.assertEqual((v.ubicacion_coincide, v.distancia_equipo_m), ('APROXIMADA', None))
+
+    # --- Coherencia ---
+    def test_fallas_implican_inconveniente_y_prioridad_sin_reclamo_se_limpia(self):
+        from .models import TipoFallaETC
+        leve = TipoFallaETC.objects.create(codigo='FT1', numero=91, descripcion='leve', gravedad='BAJA')
+        res = self.etc(fallas=[leve.id], prioridad='ALTA')
+        v = VerificacionETC.objects.get(client_uuid=res.data['client_uuid'])
+        self.assertTrue(v.tiene_inconveniente)
+        self.assertEqual((v.requiere_reclamo, v.prioridad), (False, ''))
+
+    def test_falla_critica_obliga_a_reclamar(self):
+        from .models import TipoFallaETC
+        grave = TipoFallaETC.objects.create(codigo='FT2', numero=92, descripcion='grave', gravedad='CRITICA')
+        res = self.etc(fallas=[grave.id], tiene_inconveniente='true', requiere_reclamo='false')
+        self.assertEqual(res.status_code, 201, res.data)
+        reclamo = self.equipo.reclamos.get()
+        self.assertEqual(reclamo.prioridad, 'ALTA')
+        self.assertIn('falla de gravedad crítica: F92', reclamo.historial.get().detalle)
+
+    def test_sitio_fuera_de_servicio_obliga_a_reclamar(self):
+        datos = self.datos_regulador(estado_sitio='FUERA_SERVICIO', requiere_reclamo='false')
+        self.assertEqual(self.cliente(self.tecnico).post(self.url_reg, datos, format='multipart').status_code, 201)
+        reclamo = Reclamo.objects.get(componente=self.componente)
+        self.assertEqual(reclamo.prioridad, 'ALTA')
+        self.assertIn('sitio fuera de servicio', reclamo.historial.get().detalle)
+
+
 class InformePDFTests(BaseSigverTest):
     def test_pdf_requiere_usuario_staff(self):
         url = reverse('generar_pdf', args=['etc', uuid.uuid4()])

@@ -16,8 +16,8 @@
     <link rel="preload" href="/static/vendor/inter-5.2.5/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 
     <!-- Nuestro CSS: variables compartidas con el admin + estilos de la app -->
-    <link rel="stylesheet" href="/static/css/tokens.css?v=116">
-    <link rel="stylesheet" href="/static/css/style.css?v=116">
+    <link rel="stylesheet" href="/static/css/tokens.css?v=119">
+    <link rel="stylesheet" href="/static/css/style.css?v=119">
 
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#002f6c">
@@ -158,19 +158,25 @@
 
         <!-- Navegación: en el celular la hace la barra inferior y la búsqueda está arriba -->
         <ul class="sidebar-list solo-escritorio">
-            <li class="active" data-accion="ir-mapa">
+            <li class="active">
+                <button type="button" class="sidebar-boton" data-accion="ir-mapa">
                 <i class="fa-solid fa-map" aria-hidden="true"></i> Mapa
+                </button>
             </li>
-            <li data-accion="abrir-reclamos">
+            <li>
+                <button type="button" class="sidebar-boton" data-accion="abrir-reclamos">
                 <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> <span id="menu-reclamos-label">Mis reclamos</span>
+                </button>
             </li>
         </ul>
 
         <div class="sidebar-section solo-campo">Sin señal</div>
         <ul class="sidebar-list solo-campo">
-            <li data-accion="sincronizar">
+            <li>
+                <button type="button" class="sidebar-boton" data-accion="sincronizar">
                 <i class="fa-solid fa-rotate" aria-hidden="true"></i> Sincronizar datos
                 <span id="badge-pendientes" class="badge" style="display: none;">0</span>
+                </button>
             </li>
         </ul>
 
@@ -185,8 +191,10 @@
         </ul>
 
         <ul class="sidebar-list" style="margin-top: 8px;">
-            <li data-accion="abrir-logout">
+            <li>
+                <button type="button" class="sidebar-boton" data-accion="abrir-logout">
                 <i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i> Cerrar sesión
+                </button>
             </li>
         </ul>
 
@@ -273,7 +281,14 @@
                 </div>
             </section>
 
-            <button type="submit" class="btn-submit" id="btn-guardar-verif">Guardar verificación</button>
+            <section class="tarjeta gps-card" id="verif-gps-card">
+                <span class="gps-icon"><i class="fa-solid fa-location-crosshairs" aria-hidden="true"></i></span>
+                <div>
+                    <div class="gps-titulo" id="verif-gps-titulo">Buscando tu ubicación...</div>
+                    <div class="gps-sub" id="verif-gps-sub">Activá el GPS: la ubicación se guarda con la verificación</div>
+                </div>
+            </section>
+                        <button type="submit" class="btn-submit" id="btn-guardar-verif">Guardar verificación</button>
             <div id="verif-status" class="form-status"></div>
         </form>
     </div>
@@ -660,6 +675,6 @@
     <script src="/static/vendor/leaflet-1.9.4/leaflet.js"></script>
     <script src="/static/vendor/markercluster-1.5.3/leaflet.markercluster.js"></script>
     <!-- Nuestro JS -->
-    <script type="module" src="/static/js/app.js?v=116"></script>
+    <script type="module" src="/static/js/app.js?v=119"></script>
 </body>
 </html>

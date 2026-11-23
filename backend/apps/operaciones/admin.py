@@ -13,9 +13,11 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.inventario.models import Agencia, Personal
-from apps.usuarios.permisos import InmutableSalvoAdminEAM, agencias_del_usuario, filtrar_reclamos_por_rol
+from apps.usuarios.permisos import (
+    InmutableSalvoAdminEAM, agencias_del_usuario, filtrar_reclamos_por_rol, filtrar_verificaciones_por_rol,
+)
 
-from . import indicadores, reclamos
+from . import geo, indicadores, reclamos
 from .models import (
     TipoFallaETC, Verificacion, VerificacionETC,
     PuntoInspeccionTermografia, MedicionTermografia,
@@ -47,10 +49,34 @@ def galeria(*fotos):
     return format_html('<div class="sg-galeria">{}</div>', miniaturas)
 
 
+def insignia_distancia(metros, ubicacion, precision=None, sin_gps='Sin GPS'):
+    """Distancia al equipo con color, precisión y enlace al mapa (verificaciones y reclamos)."""
+    if ubicacion is None:
+        return format_html('<span class="sg-muted">{}</span>', sin_gps)
+    if metros is None:
+        cuerpo = format_html('<span class="sg-badge sg-plazo-ok">{}</span>', 'El equipo no tiene coordenadas')
+    else:
+        clase = {'SI': 'sg-distancia-lugar', 'APROXIMADA': 'sg-distancia-cerca', 'NO': 'sg-distancia-lejos'}[geo.coincide(metros)]
+        cuerpo = format_html('<span class="sg-badge {}">{}</span>', clase, geo.texto_distancia(metros))
+    if precision is not None:
+        cuerpo = format_html('{} <span class="sg-muted">GPS ±{} m</span>', cuerpo, precision)
+    return format_html(
+        '{0} · <a href="https://www.openstreetmap.org/?mlat={1}&amp;mlon={2}#map=18/{1}/{2}" '
+        'target="_blank" rel="noopener">ver en el mapa</a>', cuerpo, f'{ubicacion.y:.6f}', f'{ubicacion.x:.6f}')
+
+
 def enlace_pdf(tipo, obj, texto='PDF'):
     url = reverse('generar_pdf', args=[tipo, obj.pk])
     return format_html('<a class="sg-btn-pdf" href="{}" target="_blank" rel="noopener">'
                        '<i class="fas fa-file-pdf"></i> {}</a>', url, texto)
+
+
+class AlcanceVerificacionesMixin:
+    """El supervisor ve las verificaciones (y sus mediciones) de sus agencias."""
+    prefijo_alcance = ''
+
+    def get_queryset(self, request):
+        return filtrar_verificaciones_por_rol(request.user, super().get_queryset(request), self.prefijo_alcance)
 
 
 @admin.register(TipoFallaETC)
@@ -79,7 +105,7 @@ class EnsayoPATInline(InmutableSalvoAdminEAM, admin.TabularInline):
 
 
 @admin.register(Verificacion)
-class VerificacionAdmin(InmutableSalvoAdminEAM, GISModelAdmin):
+class VerificacionAdmin(AlcanceVerificacionesMixin, InmutableSalvoAdminEAM, GISModelAdmin):
     list_display = ('id_verificacion', 'sitio', 'fecha_verificacion', 'responsable',
                     'estado', 'requiere_reclamo', 'informe')
     list_filter = ('estado_sitio', 'requiere_reclamo', 'agencia_responsable', 'responsable',
@@ -90,7 +116,7 @@ class VerificacionAdmin(InmutableSalvoAdminEAM, GISModelAdmin):
     date_hierarchy = 'fecha_verificacion'
     list_per_page = 25
     inlines = [MedicionTermografiaInline, EnsayoPATInline]
-    readonly_fields = ('synced_at', 'boton_pdf', 'fotos')
+    readonly_fields = ('synced_at', 'boton_pdf', 'fotos', 'distancia_gps', 'agencia_responsable')
     fieldsets = (
         ('Identificación', {'fields': ('id_verificacion', 'sitio', 'componente', 'fecha_verificacion',
                                        'responsable', 'agencia_responsable', 'boton_pdf')}),
@@ -98,7 +124,8 @@ class VerificacionAdmin(InmutableSalvoAdminEAM, GISModelAdmin):
                                          'valla_perimetral', 'es_hibrido', 'configuracion_observada',
                                          'observaciones_control_unico', 'observaciones')}),
         ('Fotos', {'fields': ('fotos', 'foto_frontal', 'foto_entorno', 'foto_control_unico')}),
-        ('Ubicación GPS', {'fields': ('ubicacion_coincide', 'ubicacion_capturada')}),
+        ('Ubicación GPS', {'fields': ('distancia_gps', 'ubicacion_coincide', 'ubicacion_capturada'),
+                           'description': 'Con GPS, «ubicación coincide» lo calcula el servidor según la distancia.'}),
         ('Reclamo', {'fields': ('requiere_reclamo', 'prioridad')}),
         ('Registro', {'fields': ('client_uuid', 'synced_at')}),
     )
@@ -110,6 +137,11 @@ class VerificacionAdmin(InmutableSalvoAdminEAM, GISModelAdmin):
     @admin.display(description='Informe')
     def informe(self, obj):
         return enlace_pdf('regulador', obj)
+
+    @admin.display(description='Distancia al equipo')
+    def distancia_gps(self, obj):
+        return insignia_distancia(obj.distancia_equipo_m, obj.ubicacion_capturada, obj.precision_gps_m,
+                                  'Sin GPS (ubicación declarada por el técnico)')
 
     @admin.display(description='Fotos de campo')
     def fotos(self, obj):
@@ -124,7 +156,7 @@ class VerificacionAdmin(InmutableSalvoAdminEAM, GISModelAdmin):
 
 
 @admin.register(VerificacionETC)
-class VerificacionETCAdmin(InmutableSalvoAdminEAM, GISModelAdmin):
+class VerificacionETCAdmin(AlcanceVerificacionesMixin, InmutableSalvoAdminEAM, GISModelAdmin):
     list_display = ('id_verificacion', 'equipo_etc', 'fecha_verificacion', 'responsable',
                     'resultado', 'informe')
     list_filter = ('tiene_inconveniente', 'requiere_reclamo', 'agencia_responsable', 'responsable')
@@ -132,14 +164,15 @@ class VerificacionETCAdmin(InmutableSalvoAdminEAM, GISModelAdmin):
     search_fields = ('id_verificacion', 'equipo_etc__nro_equipo', 'responsable__nombre_completo')
     date_hierarchy = 'fecha_verificacion'
     list_per_page = 25
-    readonly_fields = ('synced_at', 'boton_pdf', 'vista_foto')
+    readonly_fields = ('synced_at', 'boton_pdf', 'vista_foto', 'distancia_gps', 'agencia_responsable')
     fieldsets = (
         ('Identificación', {'fields': ('id_verificacion', 'equipo_etc', 'fecha_verificacion',
                                        'responsable', 'agencia_responsable', 'boton_pdf')}),
         ('Resultado', {'fields': ('tiene_inconveniente', 'fallas', 'observaciones',
                                   'requiere_reclamo', 'prioridad')}),
         ('Foto', {'fields': ('vista_foto', 'foto')}),
-        ('Ubicación GPS', {'fields': ('ubicacion_coincide', 'ubicacion_capturada')}),
+        ('Ubicación GPS', {'fields': ('distancia_gps', 'ubicacion_coincide', 'ubicacion_capturada'),
+                           'description': 'Con GPS, «ubicación coincide» lo calcula el servidor según la distancia.'}),
         ('Registro', {'fields': ('client_uuid', 'synced_at')}),
     )
 
@@ -152,6 +185,11 @@ class VerificacionETCAdmin(InmutableSalvoAdminEAM, GISModelAdmin):
     @admin.display(description='Informe')
     def informe(self, obj):
         return enlace_pdf('etc', obj)
+
+    @admin.display(description='Distancia al equipo')
+    def distancia_gps(self, obj):
+        return insignia_distancia(obj.distancia_equipo_m, obj.ubicacion_capturada, obj.precision_gps_m,
+                                  'Sin GPS (ubicación declarada por el técnico)')
 
     @admin.display(description='Foto de campo')
     def vista_foto(self, obj):
@@ -172,7 +210,8 @@ class PuntoInspeccionTermografiaAdmin(admin.ModelAdmin):
 
 
 @admin.register(MedicionTermografia)
-class MedicionTermografiaAdmin(InmutableSalvoAdminEAM, admin.ModelAdmin):
+class MedicionTermografiaAdmin(AlcanceVerificacionesMixin, InmutableSalvoAdminEAM, admin.ModelAdmin):
+    prefijo_alcance = 'verificacion__'
     list_display = ('id_medicion', 'componente', 'punto', 'fecha_hora', 'temperatura_punto_c', 'nivel_termografico')
     list_filter = ('nivel_termografico', 'fecha_hora')
     search_fields = ('id_medicion', 'componente__id_componente')
@@ -187,7 +226,8 @@ class LecturaPATInline(InmutableSalvoAdminEAM, admin.TabularInline):
 
 
 @admin.register(EnsayoPAT)
-class EnsayoPATAdmin(InmutableSalvoAdminEAM, admin.ModelAdmin):
+class EnsayoPATAdmin(AlcanceVerificacionesMixin, InmutableSalvoAdminEAM, admin.ModelAdmin):
+    prefijo_alcance = 'verificacion__'
     list_display = ('id_ensayo', 'componente', 'fecha_ensayo', 'metodo_pat', 'resultado', 'condicion_suelo')
     list_filter = ('resultado', 'condicion_suelo', 'metodo_pat')
     search_fields = ('id_ensayo', 'componente__id_componente')
@@ -196,7 +236,8 @@ class EnsayoPATAdmin(InmutableSalvoAdminEAM, admin.ModelAdmin):
 
 
 @admin.register(LecturaPAT)
-class LecturaPATAdmin(InmutableSalvoAdminEAM, admin.ModelAdmin):
+class LecturaPATAdmin(AlcanceVerificacionesMixin, InmutableSalvoAdminEAM, admin.ModelAdmin):
+    prefijo_alcance = 'ensayo__verificacion__'
     list_display = ('id_lectura', 'ensayo', 'tipo_lectura', 'distancia_m', 'valor_ohm')
     list_filter = ('tipo_lectura',)
     search_fields = ('id_lectura', 'ensayo__id_ensayo')
@@ -493,26 +534,9 @@ class ReclamoAdmin(admin.ModelAdmin):
 
     @admin.display(description='Ubicación al enviar')
     def vista_ubicacion(self, obj):
-        if obj.ubicacion_evidencia is None:
-            return format_html('<span class="sg-muted">{}</span>',
-                               'Sin GPS' if obj.foto_evidencia_despues else 'Todavía no se envió la evidencia')
-        metros = obj.distancia_evidencia_m
-        if metros is None:
-            etiqueta_html = format_html('<span class="sg-badge sg-plazo-ok">{}</span>',
-                                        'El equipo no tiene coordenadas')
-        else:
-            clase = ('sg-distancia-lugar' if metros <= reclamos.DISTANCIA_EN_EL_LUGAR_M
-                     else 'sg-distancia-cerca' if metros <= reclamos.DISTANCIA_CERCA_M
-                     else 'sg-distancia-lejos')
-            etiqueta_html = format_html('<span class="sg-badge {}">{}</span>', clase,
-                                        reclamos.texto_distancia(metros))
-        precision = (format_html(' <span class="sg-muted">GPS ±{} m</span>', obj.precision_evidencia_m)
-                     if obj.precision_evidencia_m is not None else '')
-        lat, lng = obj.ubicacion_evidencia.y, obj.ubicacion_evidencia.x
-        mapa = format_html(
-            ' · <a href="https://www.openstreetmap.org/?mlat={0}&amp;mlon={1}#map=18/{0}/{1}" '
-            'target="_blank" rel="noopener">ver en el mapa</a>', f'{lat:.6f}', f'{lng:.6f}')
-        return format_html('{}{}{}', etiqueta_html, precision, mapa)
+        return insignia_distancia(
+            obj.distancia_evidencia_m, obj.ubicacion_evidencia, obj.precision_evidencia_m,
+            'Sin GPS' if obj.foto_evidencia_despues else 'Todavía no se envió la evidencia')
 
     # Lo que viene de la verificación de campo: el supervisor no lo reescribe
     CAMPOS_DE_ORIGEN = ('id_reclamo', 'verificacion', 'componente', 'verificacion_etc', 'equipo_etc',

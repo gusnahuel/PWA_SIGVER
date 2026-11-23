@@ -2,17 +2,19 @@
  * SIGVER - Verificación de ETC (equipo telecomandado): formulario simple con
  * foto, fallas y reclamo opcional. Si no hay señal se guarda en la cola offline.
  */
-import { guardarVerificacionOffline } from './db.js?v=116';
-import { estado } from './estado.js?v=116';
-import { fetchConToken, fetchConTimeout, esErrorDeRed, describirErrorServidor } from './api.js?v=116';
-import { comprimirImagen, generarIdLocal, generarUUID } from './util.js?v=116';
+import { guardarVerificacionOffline } from './db.js?v=119';
+import { datosGps, seguirUbicacion } from './gps.js?v=119';
+import { estado } from './estado.js?v=119';
+import { fetchConToken, fetchConTimeout, esErrorDeRed, describirErrorServidor } from './api.js?v=119';
+import { comprimirImagen, generarIdLocal, generarUUID } from './util.js?v=119';
 import {
     abrirPanel, avisarSoloCelular, cerrarPanel, cerrarPopupsMapa, esEscritorio,
     repintarSegmentados, showToast,
-} from './ui.js?v=116';
-import { actualizarContadorPendientes } from './sync.js?v=116';
+} from './ui.js?v=119';
+import { actualizarContadorPendientes } from './sync.js?v=119';
 
 let equipoSeleccionadoId = null;
+let posicionActual = () => null;   // GPS del formulario abierto (ver gps.js)
 
 export function abrirFormularioVerificacion(equipoId, nroEquipo) {
     if (esEscritorio()) { avisarSoloCelular(); return; }
@@ -28,6 +30,8 @@ export function abrirFormularioVerificacion(equipoId, nroEquipo) {
     cerrarPopupsMapa();
     document.querySelectorAll('.checkbox-falla').forEach((cb) => { cb.checked = false; });
     document.getElementById('preview-foto').style.display = 'none';
+    const equipo = estado.equipos.find((e) => String(e.properties.id ?? e.id) === String(equipoId));
+    posicionActual = seguirUbicacion('verif', equipo);
 }
 
 // ==========================================
@@ -144,6 +148,7 @@ document.getElementById('form-verificacion').addEventListener('submit', async (e
         observaciones,
         requiere_reclamo: requiereReclamo,
         prioridad: requiereReclamo ? prioridad : '',
+        ...datosGps(posicionActual()),
     };
 
     const formData = new FormData();

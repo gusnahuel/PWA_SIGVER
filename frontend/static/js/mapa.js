@@ -2,12 +2,12 @@
  * SIGVER - Mapa: capas, marcadores con clustering, filtros, tarjeta del
  * equipo (celular), popup (escritorio) y "mi ubicación".
  */
-import { estado } from './estado.js?v=116';
-import { fetchConToken } from './api.js?v=116';
-import { escapeHtml, haceCuanto } from './util.js?v=116';
-import { cerrarMenu, esEscritorio, registrarAcciones, setStatus, showToast } from './ui.js?v=116';
-import { abrirFormularioVerificacion } from './verificacion-etc.js?v=116';
-import { abrirFormularioRegulador } from './verificacion-regulador.js?v=116';
+import { estado } from './estado.js?v=119';
+import { fetchConToken } from './api.js?v=119';
+import { escapeHtml, haceCuanto } from './util.js?v=119';
+import { cerrarMenu, esEscritorio, registrarAcciones, setStatus, showToast } from './ui.js?v=119';
+import { abrirFormularioVerificacion } from './verificacion-etc.js?v=119';
+import { abrirFormularioRegulador } from './verificacion-regulador.js?v=119';
 
 const API_INVENTARIO = '/api/inventario';
 const CENTRO_PARAGUAY = [-27.16, -56.24];

@@ -2,15 +2,15 @@
  * SIGVER - Reclamos: lista por pestañas (con caché para ver sin señal) y
  * envío de la evidencia del técnico para que el supervisor valide en el admin.
  */
-import { estado } from './estado.js?v=116';
-import { fetchConToken, fetchConTimeout, esErrorDeRed, describirErrorServidor } from './api.js?v=116';
-import { comprimirImagen, escapeHtml } from './util.js?v=116';
+import { estado } from './estado.js?v=119';
+import { fetchConToken, fetchConTimeout, esErrorDeRed, describirErrorServidor } from './api.js?v=119';
+import { comprimirImagen, escapeHtml } from './util.js?v=119';
 import {
-    abrirPanel, cerrarMenu, esEscritorio, marcarNav, menuAbierto, ponerBadge,
+    abrirModal, abrirPanel, cerrarMenu, cerrarModal, esEscritorio, marcarNav, menuAbierto, ponerBadge,
     registrarAcciones, showToast,
-} from './ui.js?v=116';
-import { esGestor } from './sesion.js?v=116';
-import { cerrarTarjetaEquipo } from './mapa.js?v=116';
+} from './ui.js?v=119';
+import { esGestor } from './sesion.js?v=119';
+import { cerrarTarjetaEquipo } from './mapa.js?v=119';
 
 const GRUPOS_RECLAMOS = {
     abiertos: ['ABIERTO', 'ASIGNADO'],
@@ -306,13 +306,13 @@ function abrirModalEvidencia(reclamoId, modo) {
     preview.removeAttribute('src');
     preview.style.display = 'none';
     document.querySelector('#reclamo-foto-label span').textContent = 'Tomar o elegir foto';
-    document.getElementById('modal-evidencia-reclamo').style.display = 'flex';
+    abrirModal('modal-evidencia-reclamo', { alCerrar: cerrarModalEvidencia });
     if (modo === 'finalizar') tomarUbicacion();
     else mostrarGps('');
 }
 
 function cerrarModalEvidencia() {
-    document.getElementById('modal-evidencia-reclamo').style.display = 'none';
+    cerrarModal('modal-evidencia-reclamo');
     reclamoAValidarId = null;
     posicionEvidencia = null;
 }
