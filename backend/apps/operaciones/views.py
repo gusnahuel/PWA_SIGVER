@@ -1,162 +1,205 @@
 """
 SIGVER - Vistas de Operaciones
 """
-from rest_framework import viewsets
+import base64
+import logging
+from io import BytesIO
+
+from django.contrib.admin.views.decorators import staff_member_required
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.http import Http404, HttpResponse
+from django.shortcuts import get_object_or_404
+from django.template.loader import render_to_string
+from django.utils import timezone
+from PIL import Image
+from rest_framework import status, viewsets
+from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from django.http import HttpResponse
-from django.template.loader import render_to_string
-from weasyprint import HTML
-from django.utils import timezone
-from django.conf import settings
-import base64
-import mimetypes
-from io import BytesIO
-from PIL import Image
 
-
-from .models import VerificacionETC, TipoFallaETC, Verificacion, PuntoInspeccionTermografia, Reclamo
-from .serializers import VerificacionETCSerializer, TipoFallaETCSerializer, PersonalSerializer, VerificacionSerializer
 from apps.inventario.models import Personal
-from .serializers import PuntoInspeccionTermografiaSerializer, ReclamoSerializer
+from apps.usuarios.permisos import SoloLecturaParaConsulta, filtrar_reclamos_por_rol
+from . import reclamos
+from .models import (
+    PuntoInspeccionTermografia, Reclamo, TipoFallaETC, Verificacion, VerificacionETC,
+)
+from .serializers import (
+    PersonalSerializer, PuntoInspeccionTermografiaSerializer, ReclamoSerializer,
+    TipoFallaETCSerializer, VerificacionETCSerializer, VerificacionSerializer,
+)
+
+logger = logging.getLogger(__name__)
 
 
+class SincronizacionIdempotenteMixin:
+    """
+    Creación idempotente por `client_uuid`.
 
-class VerificacionETCViewSet(viewsets.ModelViewSet):
-    """Endpoint para crear y listar verificaciones de ETC."""
-    queryset = VerificacionETC.objects.all().order_by('-fecha_verificacion')
-    serializer_class = VerificacionETCSerializer
-    permission_classes = [IsAuthenticated]
-    parser_classes = (MultiPartParser, FormParser, JSONParser)
+    Si la PWA reenvía una verificación que ya llegó (p. ej. el primer envío
+    se guardó pero la respuesta se perdió por mala señal), devolvemos 200 con
+    el registro existente en lugar de un 400, para que el cliente la pueda
+    quitar de su cola sin perder datos.
+    """
+    http_method_names = ['get', 'post', 'head', 'options']
 
     def create(self, request, *args, **kwargs):
+        client_uuid = request.data.get('client_uuid')
+        if client_uuid:
+            try:
+                existente = self.get_queryset().filter(client_uuid=client_uuid).first()
+            except (ValueError, DjangoValidationError):
+                existente = None
+            if existente is not None:
+                return Response(self.get_serializer(existente).data, status=status.HTTP_200_OK)
+
         serializer = self.get_serializer(data=request.data)
         if not serializer.is_valid():
-            # ESTO IMPRIMIRÁ EL ERROR EXACTO EN LA TERMINAL
-            print("❌ ERROR DE VALIDACIÓN:", serializer.errors)
-            return Response(serializer.errors, status=400)
-        
+            logger.warning('Verificación rechazada (%s): %s', self.__class__.__name__, serializer.errors)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
         self.perform_create(serializer)
         headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=201, headers=headers)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+class VerificacionETCViewSet(SincronizacionIdempotenteMixin, viewsets.ModelViewSet):
+    """Crear y listar verificaciones de ETC (los registros no se editan ni borran por API)."""
+    queryset = VerificacionETC.objects.select_related('equipo_etc', 'responsable').order_by('-fecha_verificacion')
+    serializer_class = VerificacionETCSerializer
+    permission_classes = [IsAuthenticated, SoloLecturaParaConsulta]
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+
+
+class VerificacionViewSet(SincronizacionIdempotenteMixin, viewsets.ModelViewSet):
+    """Crear y listar verificaciones de Reguladores (los registros no se editan ni borran por API)."""
+    queryset = Verificacion.objects.select_related('sitio', 'componente', 'responsable').order_by('-fecha_verificacion')
+    serializer_class = VerificacionSerializer
+    permission_classes = [IsAuthenticated, SoloLecturaParaConsulta]
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
 
 
 class TipoFallaETCViewSet(viewsets.ReadOnlyModelViewSet):
-    """Endpoint para listar las 26 fallas del manual."""
+    """Las 26 fallas del manual."""
     queryset = TipoFallaETC.objects.filter(activo=True)
     serializer_class = TipoFallaETCSerializer
     permission_classes = [IsAuthenticated]
 
 
 class PersonalViewSet(viewsets.ReadOnlyModelViewSet):
-    """Endpoint para listar el personal de campo."""
+    """Personal de campo activo."""
     queryset = Personal.objects.filter(activo=True)
     serializer_class = PersonalSerializer
     permission_classes = [IsAuthenticated]
 
-class ReclamoViewSet(viewsets.ModelViewSet):
-    queryset = Reclamo.objects.all().order_by('-fecha_reclamo')
-    serializer_class = ReclamoSerializer
-    permission_classes = [IsAuthenticated]
 
-    def get_queryset(self):
-        qs = super().get_queryset()
-        # Si el frontend pide los reclamos de un técnico específico
-        personal_id = self.request.query_params.get('responsable_asignado', None)
-        if personal_id:
-            return qs.filter(responsable_asignado_id=personal_id)
-        return qs    
-
-class VerificacionViewSet(viewsets.ModelViewSet):
-    """Endpoint para crear y listar verificaciones de Reguladores."""
-    queryset = Verificacion.objects.all().order_by('-fecha_verificacion')
-    serializer_class = VerificacionSerializer
-    permission_classes = [IsAuthenticated]
-    parser_classes = (MultiPartParser, FormParser, JSONParser)
-
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        if not serializer.is_valid():
-            # ESTO IMPRIMIRÁ EL ERROR EXACTO EN LA TERMINAL
-            print("❌ ERROR DE VALIDACIÓN:", serializer.errors)
-            return Response(serializer.errors, status=400)
-        
-        self.perform_create(serializer)
-        headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=201, headers=headers)
-    
 class PuntoInspeccionTermografiaViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = PuntoInspeccionTermografia.objects.filter(activo=True)
     serializer_class = PuntoInspeccionTermografiaSerializer
     permission_classes = [IsAuthenticated]
 
-def imagen_a_base64(imagen):
-    if not imagen:
-        return None
-    try:
-        with imagen.open('rb') as f:
-            return "data:image/jpeg;base64," + base64.b64encode(f.read()).decode('utf-8')
-    except Exception as e:
-        print(f"Error al codificar imagen: {e}")
-        return None
 
-def imagen_a_base64(imagen):
+class ReclamoViewSet(viewsets.ModelViewSet):
+    """
+    Reclamos filtrados por rol. Las reglas de cada cambio (quién, desde qué
+    estado, con qué requisitos) están en apps/operaciones/reclamos.py, las
+    mismas que usa el admin.
+    Sin DELETE: un reclamo no se borra, se rechaza con motivo (queda en el historial).
+    """
+    queryset = Reclamo.objects.select_related('equipo_etc').prefetch_related('historial').order_by('-fecha_reclamo')
+    serializer_class = ReclamoSerializer
+    permission_classes = [IsAuthenticated, SoloLecturaParaConsulta]
+    http_method_names = ['get', 'post', 'patch', 'head', 'options']
+
+    def get_queryset(self):
+        qs = filtrar_reclamos_por_rol(self.request.user, super().get_queryset())
+        personal_id = self.request.query_params.get('responsable_asignado')
+        if personal_id:
+            try:
+                qs = qs.filter(responsable_asignado_id=personal_id)
+            except (ValueError, DjangoValidationError):
+                return qs.none()
+        return qs
+
+    @staticmethod
+    def _aplicar(funcion, *args, **kwargs):
+        try:
+            return funcion(*args, **kwargs)
+        except reclamos.ReglaReclamo as e:
+            if e.permiso:
+                raise PermissionDenied(e.mensaje)
+            raise ValidationError({e.campo or 'detail': [e.mensaje]})
+
+    def perform_create(self, serializer):
+        datos = dict(serializer.validated_data)
+        comentario = datos.pop('comentario', '')
+        datos = self._aplicar(reclamos.preparar_nuevo, self.request.user, datos)
+        serializer.instance = reclamos.crear(self.request.user, detalle='Cargado a mano',
+                                             comentario=comentario, **datos)
+
+    def perform_update(self, serializer):
+        cambios = dict(serializer.validated_data)
+        comentario = cambios.pop('comentario', '')
+        serializer.instance = self._aplicar(
+            reclamos.actualizar, serializer.instance, self.request.user, cambios, comentario,
+        )
+        # El historial se precargó antes del cambio: que la respuesta traiga el nuevo
+        serializer.instance = self.get_queryset().get(pk=serializer.instance.pk)
+
+
+# =====================================================
+# INFORMES PDF
+# =====================================================
+
+def imagen_a_base64(imagen, max_size=(800, 800)):
+    """Reduce la imagen y la devuelve como data-URI JPEG para incrustarla en el PDF."""
     if not imagen:
         return None
     try:
         if not imagen.storage.exists(imagen.name):
             return None
-            
         with imagen.open('rb') as f:
             img = Image.open(f)
-            
-            # Convertir a RGB si es necesario (por si es PNG con transparencia)
-            if img.mode in ("RGBA", "P"):
-                img = img.convert("RGB")
-            
-            # 👇 REDIMENSIONAR: Máximo 800px de ancho para que no pese tanto
-            max_size = (800, 800)
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
             img.thumbnail(max_size, Image.Resampling.LANCZOS)
-            
-            # Guardar en memoria
             output = BytesIO()
-            img.save(output, format='JPEG', quality=80) # Calidad 80% es buen balance
-            encoded = base64.b64encode(output.getvalue()).decode('utf-8')
-            
-            return f"data:image/jpeg;base64,{encoded}"
-    except Exception as e:
-        print(f"❌ Error al codificar imagen {imagen.name}: {e}")
+            img.save(output, format='JPEG', quality=80)
+        return 'data:image/jpeg;base64,' + base64.b64encode(output.getvalue()).decode('ascii')
+    except Exception:
+        logger.exception('Error al codificar imagen %s', imagen.name)
         return None
 
+
+@staff_member_required
 def generar_informe_pdf(request, tipo, id):
+    """Informe PDF de una verificación. Solo accesible desde el admin (usuarios staff)."""
+    from weasyprint import HTML  # import diferido: carga pesada
+
     if tipo == 'etc':
-        verificacion = VerificacionETC.objects.get(id=id)
-        template = 'reportes/informe_verificacion.html'
+        verificacion = get_object_or_404(VerificacionETC, id=id)
         contexto = {
-            'verificacion': verificacion, 
+            'verificacion': verificacion,
             'tipo': 'ETC',
-            'foto_b64': imagen_a_base64(verificacion.foto)
+            'foto_b64': imagen_a_base64(verificacion.foto),
         }
-    else:
-        verificacion = Verificacion.objects.get(id=id)
-        template = 'reportes/informe_verificacion.html'
+    elif tipo == 'regulador':
+        verificacion = get_object_or_404(Verificacion, id=id)
         contexto = {
-            'verificacion': verificacion, 
+            'verificacion': verificacion,
             'tipo': 'REGULADOR',
             'foto_frontal_b64': imagen_a_base64(verificacion.foto_frontal),
             'foto_entorno_b64': imagen_a_base64(verificacion.foto_entorno),
-            'foto_control_b64': imagen_a_base64(verificacion.foto_control_unico)
+            'foto_control_b64': imagen_a_base64(verificacion.foto_control_unico),
         }
+    else:
+        raise Http404('Tipo de informe desconocido.')
 
     contexto['fecha_actual'] = timezone.now()
-    html_string = render_to_string(template, contexto)
-    html = HTML(string=html_string)
-    pdf = html.write_pdf()
+    html_string = render_to_string('reportes/informe_verificacion.html', contexto, request=request)
+    pdf = HTML(string=html_string).write_pdf()
 
     response = HttpResponse(pdf, content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="informe_{tipo}_{id}.pdf"'
     response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-    response['Pragma'] = 'no-cache'
-    response['Expires'] = '0'
     return response

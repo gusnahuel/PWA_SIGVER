@@ -34,8 +34,9 @@ export async function guardarVerificacionOffline(payload) {
         const store = tx.objectStore(STORE_NAME);
         
         // Agregar metadata extra
-        payload.estado_sync = 'pendiente';
-        payload.timestamp_local = Date.now();
+        // (se respeta 'error' cuando el servidor rechazó el envío)
+        payload.estado_sync = payload.estado_sync || 'pendiente';
+        payload.timestamp_local = payload.timestamp_local || Date.now();
 
         const request = store.put(payload); // put guarda o actualiza
 

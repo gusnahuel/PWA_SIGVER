@@ -27,6 +27,7 @@ gunicorn==22.0.*
 
 # Reportes PDF
 weasyprint==63.0
+Pillow>=10.4,<12
 
 
 # Calidad de código
@@ -36,5 +37,8 @@ ruff==0.6.*
 pytest==8.3.*
 pytest-django==4.9.*
 pytest-cov==5.0.*
+# Importación de planillas
 openpyxl==3.1.*
-django-jazzmin
+
+# Admin
+django-jazzmin==3.0.*

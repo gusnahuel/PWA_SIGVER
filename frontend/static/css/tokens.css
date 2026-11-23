@@ -1,0 +1,53 @@
+/* ==========================================================
+   SIGVER · Variables de diseño compartidas
+   Las usan la PWA (style.css) y el admin de Django (sigver_admin/admin.css).
+   Cambiar un valor acá lo cambia en los dos lados.
+   Al editar este archivo, correr scripts/version.sh para que la PWA lo reciba
+   (el admin lo importa sin ?v= y nginx se lo revalida en cada visita).
+   ========================================================== */
+:root {
+    /* Marca ANDE */
+    --ande-blue: #002f6c;
+    --ande-blue-dark: #001f48;
+    --ande-blue-soft: #e8eef7;
+    --ande-yellow: #f5b000;
+    --ande-yellow-soft: #fef3c7;
+    --teal: #0f766e;
+
+    /* Superficies y texto */
+    --bg-color: #f4f6f9;
+    --surface: #ffffff;
+    --surface-muted: #f1f5f9;
+    --text-main: #0f172a;
+    --text-body: #334155;
+    --text-muted: #475569;
+    --text-faint: #64748b;
+    --border-color: #e2e8f0;
+    --border-strong: #cbd5e1;
+
+    /* Estados (reservados: siempre acompañados de texto o ícono) */
+    --success: #047857;
+    --success-soft: #d1fae5;
+    --warning: #b45309;
+    --warning-soft: #ffedd5;
+    --danger: #b91c1c;
+    --danger-soft: #fee2e2;
+    --info: #1d4ed8;
+    --info-soft: #dbeafe;
+    --pending: #6d28d9;        /* pendiente de validación */
+    --pending-soft: #ede9fe;
+    --neutral: #475569;
+    --neutral-soft: #e2e8f0;
+
+    /* Forma */
+    --radius-sm: 10px;
+    --radius-md: 14px;
+    --radius-lg: 20px;
+    --radius-xl: 24px;
+    --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06);
+    --shadow-md: 0 4px 16px rgba(15, 23, 42, 0.10);
+    --shadow-lg: 0 12px 40px rgba(15, 23, 42, 0.18);
+
+    /* Tipografía */
+    --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}

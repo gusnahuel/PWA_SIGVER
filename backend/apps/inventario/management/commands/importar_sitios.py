@@ -237,7 +237,7 @@ class Command(BaseCommand):
                 errores.append(f"Fila {row_idx} ({id_sitio}): {e}")
 
         self.stdout.write('')
-        self.stdout.write(self.style.SUCCESS(f"📊 Resumen:"))
+        self.stdout.write(self.style.SUCCESS("📊 Resumen:"))
         self.stdout.write(self.style.SUCCESS(f"   • Creados:      {creados}"))
         self.stdout.write(self.style.SUCCESS(f"   • Actualizados: {actualizados}"))
         self.stdout.write(self.style.WARNING(f"   • Saltados:     {saltados}"))

@@ -19,7 +19,7 @@ class EquipoETCViewSet(viewsets.ReadOnlyModelViewSet):
 
 class SitioViewSet(viewsets.ReadOnlyModelViewSet):
     """Endpoint de solo lectura para Sitios (reguladores). Sin paginación."""
-    queryset = Sitio.objects.select_related('alimentador__subestacion').all()
+    queryset = Sitio.objects.select_related('alimentador__subestacion').prefetch_related('componentes')
     serializer_class = SitioSerializer
     permission_classes = [IsAuthenticated]
     pagination_class = None   # 👈 Deshabilitar paginación

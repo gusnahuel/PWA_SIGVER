@@ -1,0 +1,153 @@
+{% extends "admin/base_site.html" %}
+{% load sigver_admin %}
+
+{% block title %}Indicadores de reclamos | SIGVER{% endblock %}
+{% block content_title %}Indicadores de reclamos{% endblock %}
+
+{% block breadcrumbs %}
+<ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'admin:index' %}">Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{% url 'admin:operaciones_reclamo_changelist' %}">Reclamos</a></li>
+    <li class="breadcrumb-item active">Indicadores</li>
+</ol>
+{% endblock %}
+
+{% block content %}
+<div class="sg-indicadores col-12">
+
+    {# Período: un solo control, arriba de todo #}
+    <nav class="sg-periodos" aria-label="Período">
+        {% for clave, nombre in ind.periodos %}
+        <a href="?periodo={{ clave }}" class="sg-periodo{% if clave == ind.periodo %} activo{% endif %}"
+           {% if clave == ind.periodo %}aria-current="true"{% endif %}>{{ nombre }}</a>
+        {% endfor %}
+    </nav>
+    <p class="sg-nota">Reclamos recibidos en el período, dentro de las agencias que tenés asignadas.</p>
+
+    {# KPI: los números que se leen primero #}
+    <section class="sg-kpis" aria-label="Resumen">
+        <div class="sg-kpi">
+            <span class="sg-kpi-titulo">Recibidos</span>
+            <span class="sg-kpi-valor">{{ ind.total.recibidos }}</span>
+            <span class="sg-kpi-ayuda">{{ ind.total.activos }} sin terminar</span>
+        </div>
+        <div class="sg-kpi">
+            <span class="sg-kpi-titulo">Cerrados</span>
+            <span class="sg-kpi-valor">{{ ind.total.cerrados }}</span>
+            <span class="sg-kpi-ayuda">{{ ind.total.rechazados }} rechazados</span>
+        </div>
+        <div class="sg-kpi">
+            <span class="sg-kpi-titulo">Tiempo medio de resolución</span>
+            <span class="sg-kpi-valor">{{ ind.total.tiempo_medio|duracion }}</span>
+            <span class="sg-kpi-ayuda">desde que llega hasta que se valida</span>
+        </div>
+        <div class="sg-kpi">
+            <span class="sg-kpi-titulo">Resueltos en plazo</span>
+            <span class="sg-kpi-valor">{% if ind.total.pct_en_plazo is not None %}{{ ind.total.pct_en_plazo }} %{% else %}—{% endif %}</span>
+            <span class="sg-kpi-ayuda">de {{ ind.total.con_plazo }} cerrado{{ ind.total.con_plazo|pluralize }} con plazo</span>
+        </div>
+        <a class="sg-kpi sg-kpi-enlace{% if ind.vencidos_ahora %} sg-kpi-alerta{% endif %}"
+           href="{% url 'admin:operaciones_reclamo_changelist' %}?bandeja=vencidos">
+            <span class="sg-kpi-titulo">Vencidos ahora</span>
+            <span class="sg-kpi-valor">{% if ind.vencidos_ahora %}<i class="fas fa-hourglass-end" aria-hidden="true"></i> {% endif %}{{ ind.vencidos_ahora }}</span>
+            <span class="sg-kpi-ayuda">ver la bandeja <i class="fas fa-chevron-right" aria-hidden="true"></i></span>
+        </a>
+        <div class="sg-kpi">
+            <span class="sg-kpi-titulo">Devueltos al técnico</span>
+            <span class="sg-kpi-valor">{% if ind.total.pct_devueltos is not None %}{{ ind.total.pct_devueltos }} %{% else %}—{% endif %}</span>
+            <span class="sg-kpi-ayuda">de {{ ind.total.llegaron_a_validacion }} enviado{{ ind.total.llegaron_a_validacion|pluralize }} a validación</span>
+        </div>
+    </section>
+
+    <div class="sg-columnas">
+        {# Tiempo medio frente al plazo de cada prioridad: lista de medidores #}
+        <section class="sg-tarjeta sg-seccion">
+            <header class="sg-tarjeta-cabecera">
+                <h2 class="sg-titulo-seccion">Tiempo medio frente al plazo</h2>
+            </header>
+            <ul class="sg-medidores">
+                {% for p in ind.por_prioridad %}
+                <li class="sg-medidor{% if p.excede_plazo %} excedido{% endif %}">
+                    <span class="sg-medidor-nombre">{{ p.nombre }}</span>
+                    <span class="sg-medidor-barra" role="img"
+                          aria-label="{% if p.tiempo_medio %}{{ p.tiempo_medio|duracion }} de {{ p.plazo|duracion }}{% else %}Sin reclamos cerrados{% endif %}">
+                        {% if p.ancho_barra is not None %}<span class="sg-medidor-relleno" style="width: {{ p.ancho_barra }}%"></span>{% endif %}
+                    </span>
+                    <span class="sg-medidor-cifra">
+                        {% if p.tiempo_medio %}
+                            {% if p.excede_plazo %}<i class="fas fa-exclamation-triangle" aria-hidden="true"></i> {% endif %}{{ p.tiempo_medio|duracion }}
+                            <span class="sg-muted">de {{ p.plazo|duracion }}</span>
+                        {% else %}<span class="sg-muted">Sin cerrados · plazo {{ p.plazo|duracion }}</span>{% endif %}
+                    </span>
+                </li>
+                {% endfor %}
+            </ul>
+            <p class="sg-nota">La barra llena es el plazo de la prioridad. Si el promedio lo supera se marca en rojo.</p>
+        </section>
+
+        {# Por prioridad: los mismos números en tabla #}
+        <section class="sg-tarjeta sg-seccion">
+            <header class="sg-tarjeta-cabecera">
+                <h2 class="sg-titulo-seccion">Por prioridad</h2>
+            </header>
+            <div class="sg-tabla-scroll">
+                <table class="sg-tabla">
+                    <thead><tr>
+                        <th scope="col">Prioridad</th><th scope="col">Recibidos</th><th scope="col">Cerrados</th>
+                        <th scope="col">En plazo</th><th scope="col">Vencidos ahora</th>
+                    </tr></thead>
+                    <tbody>
+                    {% for p in ind.por_prioridad %}
+                    <tr>
+                        <th scope="row">{{ p.nombre }}</th>
+                        <td>{{ p.recibidos }}</td>
+                        <td>{{ p.cerrados }}</td>
+                        <td>{% if p.pct_en_plazo is not None %}{{ p.pct_en_plazo }} %{% else %}—{% endif %}</td>
+                        <td>{% if p.vencidos %}<span class="sg-badge sg-plazo-vencido">{{ p.vencidos }}</span>{% else %}0{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <section class="sg-tarjeta sg-seccion">
+        <header class="sg-tarjeta-cabecera">
+            <h2 class="sg-titulo-seccion">Por agencia</h2>
+        </header>
+        {% if ind.por_agencia %}
+        <div class="sg-tabla-scroll">
+            <table class="sg-tabla">
+                <thead><tr>
+                    <th scope="col">Agencia</th><th scope="col">Recibidos</th><th scope="col">Sin terminar</th>
+                    <th scope="col">Cerrados</th><th scope="col">Tiempo medio</th><th scope="col">En plazo</th>
+                    <th scope="col">Devueltos</th><th scope="col">Vencidos ahora</th>
+                </tr></thead>
+                <tbody>
+                {% for a in ind.por_agencia %}
+                <tr>
+                    <th scope="row">{{ a.nombre }}</th>
+                    <td>{{ a.recibidos }}</td>
+                    <td>{{ a.activos }}</td>
+                    <td>{{ a.cerrados }}</td>
+                    <td>{{ a.tiempo_medio|duracion }}</td>
+                    <td>{% if a.pct_en_plazo is not None %}{{ a.pct_en_plazo }} %{% else %}—{% endif %}</td>
+                    <td>{% if a.pct_devueltos is not None %}{{ a.pct_devueltos }} %{% else %}—{% endif %}</td>
+                    <td>{% if a.vencidos %}<span class="sg-badge sg-plazo-vencido">{{ a.vencidos }}</span>{% else %}0{% endif %}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="sg-muted">No hay reclamos en este período.</p>
+        {% endif %}
+    </section>
+
+    <p class="sg-nota">
+        «Tiempo medio» y «En plazo» se calculan con los reclamos cerrados. Los cerrados antes de que el sistema
+        registrara validación y plazos (noviembre de 2026) no tienen esos datos y no se cuentan.
+    </p>
+</div>
+{% endblock %}

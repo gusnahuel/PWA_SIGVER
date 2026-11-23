@@ -1,0 +1,85 @@
+{% extends "admin/index.html" %}
+{% load i18n sigver_admin log %}
+
+{% block content_title %}Inicio{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+
+{% block content %}
+{% panel_supervisor as panel %}
+<div class="sg-inicio col-12">
+
+    {% if panel.bandejas %}
+    <section class="sg-seccion">
+        <h2 class="sg-titulo-seccion">Bandejas de trabajo</h2>
+        <div class="sg-bandejas">
+            {% for b in panel.bandejas %}
+            <a class="sg-bandeja sg-tono-{{ b.tono }}{% if not b.cantidad %} sg-vacia{% endif %}" href="{{ b.url }}">
+                <span class="sg-bandeja-icono"><i class="{{ b.icono }}"></i></span>
+                <span class="sg-bandeja-cuerpo">
+                    <span class="sg-bandeja-cantidad">{{ b.cantidad }}</span>
+                    <span class="sg-bandeja-titulo">{{ b.titulo }}</span>
+                    <span class="sg-bandeja-ayuda">{% if b.cantidad %}{{ b.ayuda }}{% else %}Nada pendiente{% endif %}</span>
+                </span>
+                <i class="fas fa-chevron-right sg-bandeja-flecha"></i>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <div class="sg-columnas">
+        {% if panel.verificaciones %}
+        <section class="sg-seccion sg-tarjeta">
+            <header class="sg-tarjeta-cabecera">
+                <h2 class="sg-titulo-seccion">Últimas verificaciones recibidas</h2>
+                <a href="{% url 'admin:operaciones_verificacion_changelist' %}" class="sg-link">Ver todas</a>
+            </header>
+            <ul class="sg-lista">
+                {% for v in panel.verificaciones %}
+                <li>
+                    <a href="{{ v.url }}" class="sg-fila">
+                        <span class="sg-chip-tipo">{{ v.tipo }}</span>
+                        <span class="sg-fila-principal">
+                            <strong>{{ v.codigo }}</strong>
+                            <small>{{ v.responsable }} · {{ v.fecha|date:"d/m/Y H:i" }}</small>
+                        </span>
+                        <span class="sg-badge sg-sitio-{{ v.estado }}">{{ v.estado_txt }}</span>
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+        </section>
+        {% endif %}
+
+        <section class="sg-seccion sg-tarjeta">
+            <header class="sg-tarjeta-cabecera">
+                <h2 class="sg-titulo-seccion">Tus últimos cambios</h2>
+            </header>
+            {% get_admin_log 6 as admin_log for_user user %}
+            {% if admin_log %}
+            <ul class="sg-lista">
+                {% for entry in admin_log %}
+                <li>
+                    {% if entry.is_deletion or not entry.get_admin_url %}
+                    <span class="sg-fila">
+                    {% else %}
+                    <a href="{{ entry.get_admin_url }}" class="sg-fila">
+                    {% endif %}
+                        <span class="sg-accion {% if entry.is_addition %}sg-accion-alta{% elif entry.is_change %}sg-accion-cambio{% else %}sg-accion-baja{% endif %}">
+                            <i class="fas {% if entry.is_addition %}fa-plus{% elif entry.is_change %}fa-pen{% else %}fa-trash{% endif %}"></i>
+                        </span>
+                        <span class="sg-fila-principal">
+                            <strong>{{ entry.object_repr|truncatechars:48 }}</strong>
+                            <small>{% if entry.content_type %}{% filter capfirst %}{{ entry.content_type.name }}{% endfilter %} · {% endif %}{{ entry.action_time|timesince }}</small>
+                        </span>
+                    {% if entry.is_deletion or not entry.get_admin_url %}</span>{% else %}</a>{% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="sg-muted sg-vacio">Todavía no hiciste cambios desde el admin.</p>
+            {% endif %}
+        </section>
+    </div>
+</div>
+{% endblock %}

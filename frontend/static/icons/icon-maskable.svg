@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+    <!-- Versión "maskable": fondo a sangre y dibujo dentro de la zona segura (80% central),
+         porque Android lo recorta en círculo o en gota. Sin texto: el nombre ya va debajo del ícono. -->
+    <rect width="512" height="512" fill="#002F6C"/>
+    <g transform="translate(256 256) scale(1.25) translate(-256 -215)">
+        <circle cx="256" cy="200" r="100" fill="#e4e2de"/>
+        <path d="M290 100 L230 220 L280 220 L240 330 L320 200 L270 200 Z" fill="#bd0606"/>
+    </g>
+</svg>

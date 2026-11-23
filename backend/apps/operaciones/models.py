@@ -4,8 +4,10 @@ Verificaciones, mediciones, ensayos y reclamos.
 """
 import uuid
 
+from django.conf import settings
 from django.contrib.gis.db import models as gis_models
 from django.db import models
+from django.utils import timezone
 
 
 # =====================================================
@@ -389,21 +391,42 @@ class LecturaPAT(models.Model):
 # =====================================================
 
 class Reclamo(models.Model):
-    """Reclamo de mantenimiento con workflow de estados."""
+    """
+    Reclamo de mantenimiento con workflow de estados.
+    Las reglas de cada cambio (quién, desde qué estado, con qué requisitos)
+    están en apps/operaciones/reclamos.py: no modificar el estado a mano.
+    """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     id_reclamo = models.CharField(max_length=50, unique=True)
 
+    # Origen: un reclamo de regulador apunta a su verificación y componente;
+    # uno de ETC, a su verificación de ETC y al equipo.
     verificacion = models.ForeignKey(
         Verificacion,
         null=True, blank=True,
         on_delete=models.SET_NULL,
         related_name='reclamos',
+        verbose_name='verificación de regulador',
     )
     componente = models.ForeignKey(
         'inventario.Componente',
         null=True, blank=True,
         on_delete=models.PROTECT,
         related_name='reclamos',
+    )
+    verificacion_etc = models.ForeignKey(
+        VerificacionETC,
+        null=True, blank=True,
+        on_delete=models.PROTECT,
+        related_name='reclamos',
+        verbose_name='verificación de ETC',
+    )
+    equipo_etc = models.ForeignKey(
+        'inventario.EquipoETC',
+        null=True, blank=True,
+        on_delete=models.PROTECT,
+        related_name='reclamos',
+        verbose_name='equipo ETC',
     )
 
     fecha_reclamo = models.DateTimeField(auto_now_add=True)
@@ -431,11 +454,14 @@ class Reclamo(models.Model):
         ('ABIERTO', 'Abierto'),
         ('ASIGNADO', 'Asignado'),
         ('EN_PROCESO', 'En Proceso'),
-        ('RESUELTO', 'Resuelto'),
+        ('PENDIENTE_VALIDACION', 'Pendiente de validación'),
+        # Cerrado = trabajo validado por el supervisor (antes existía también
+        # "Resuelto", con el mismo significado; se unificaron)
         ('CERRADO', 'Cerrado'),
         ('RECHAZADO', 'Rechazado'),
     ]
-    estado = models.CharField(max_length=15, choices=ESTADO, default='ABIERTO')
+    # 25: 'PENDIENTE_VALIDACION' tiene 20 caracteres
+    estado = models.CharField(max_length=25, choices=ESTADO, default='ABIERTO')
 
     agencia_responsable = models.ForeignKey(
         'inventario.Agencia',
@@ -451,14 +477,38 @@ class Reclamo(models.Model):
     )
 
     requiere_intervencion = models.BooleanField(default=True)
+    fecha_limite = models.DateTimeField(
+        null=True, blank=True, db_index=True,
+        help_text='Plazo para resolverlo, según la prioridad (ver PLAZOS en reclamos.py)',
+    )
     fecha_asignacion = models.DateTimeField(null=True, blank=True)
+    fecha_inicio = models.DateTimeField(
+        null=True, blank=True, help_text='Cuándo el técnico empezó el trabajo (con la foto del estado inicial)',
+    )
     fecha_ejecucion = models.DateTimeField(null=True, blank=True)
     fecha_cierre = models.DateTimeField(null=True, blank=True)
+    validado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='reclamos_validados',
+        help_text='Supervisor que aprobó el trabajo del técnico',
+    )
+    fecha_validacion = models.DateTimeField(null=True, blank=True)
     resultado = models.TextField(blank=True)
     motivo_rechazo = models.TextField(blank=True)
     foto_evidencia_antes = models.ImageField(upload_to='reclamos/antes/%Y/%m/', null=True, blank=True)
     foto_evidencia_despues = models.ImageField(upload_to='reclamos/despues/%Y/%m/', null=True, blank=True)
     observaciones_cierre = models.TextField(blank=True)
+
+    # Dónde estaba el técnico al enviar la evidencia (prueba de que trabajó en el lugar)
+    ubicacion_evidencia = gis_models.PointField(geography=True, null=True, blank=True)
+    precision_evidencia_m = models.PositiveIntegerField(
+        null=True, blank=True, help_text='Precisión informada por el GPS del celular',
+    )
+    distancia_evidencia_m = models.PositiveIntegerField(
+        null=True, blank=True, help_text='Distancia al equipo, calculada por el servidor',
+    )
 
     class Meta:
         verbose_name = 'Reclamo'
@@ -471,3 +521,32 @@ class Reclamo(models.Model):
 
     def __str__(self):
         return f"Reclamo {self.id_reclamo} - {self.get_estado_display()}"
+
+
+class HistorialReclamo(models.Model):
+    """
+    Bitácora de un reclamo: cada cambio de estado, asignación o dato, con
+    quién lo hizo, cuándo y por qué. Solo se agrega; nunca se edita.
+    """
+    reclamo = models.ForeignKey(Reclamo, on_delete=models.CASCADE, related_name='historial')
+    fecha = models.DateTimeField(default=timezone.now, db_index=True)
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='+',
+    )
+    # Copia del nombre: si el usuario se da de baja, el historial sigue diciendo quién fue
+    usuario_nombre = models.CharField(max_length=150, blank=True)
+    estado_anterior = models.CharField(max_length=25, choices=Reclamo.ESTADO, blank=True)
+    estado_nuevo = models.CharField(max_length=25, choices=Reclamo.ESTADO, blank=True)
+    detalle = models.TextField(blank=True, help_text='Qué cambió (asignación, prioridad, etc.)')
+    comentario = models.TextField(blank=True, help_text='Motivo o nota de quien hizo el cambio')
+
+    class Meta:
+        verbose_name = 'Movimiento del reclamo'
+        verbose_name_plural = 'Historial del reclamo'
+        ordering = ['fecha', 'id']
+
+    def __str__(self):
+        return f"{self.reclamo.id_reclamo} · {self.fecha:%d/%m/%Y %H:%M} · {self.usuario_nombre}"

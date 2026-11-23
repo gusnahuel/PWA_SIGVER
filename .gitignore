@@ -82,3 +82,8 @@ redisdata/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ==========================================
+# Certificados HTTPS (claves privadas: nunca al repositorio)
+# ==========================================
+nginx/certs/

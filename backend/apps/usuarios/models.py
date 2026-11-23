@@ -57,6 +57,26 @@ class Usuario(AbstractUser):
     def __str__(self):
         return f"{self.get_full_name() or self.username} ({self.get_rol_display()})"
 
+    def save(self, *args, **kwargs):
+        # El acceso al admin lo da el rol, no una casilla suelta: supervisores
+        # y admin_eam entran; técnicos y consulta usan solo la PWA.
+        from .permisos import ROLES_CON_ADMIN
+        self.is_staff = self.is_superuser or self.rol in ROLES_CON_ADMIN
+        super().save(*args, **kwargs)
+        self.sincronizar_grupos()
+
+    def sincronizar_grupos(self):
+        """Pone o quita al usuario del grupo de supervisores según su rol."""
+        from django.contrib.auth.models import Group
+        from .permisos import GRUPO_SUPERVISORES
+        grupo = Group.objects.filter(name=GRUPO_SUPERVISORES).first()
+        if grupo is None:  # todavía no se corrió migrate
+            return
+        if self.rol == 'supervisor_zona':
+            self.groups.add(grupo)
+        else:
+            self.groups.remove(grupo)
+
     @property
     def es_admin_eam(self):
         """Retorna True si el usuario es administrador EAM o superusuario."""

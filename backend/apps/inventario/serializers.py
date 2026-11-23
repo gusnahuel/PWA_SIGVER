@@ -23,7 +23,7 @@ class EquipoETCSerializer(GeoFeatureModelSerializer):
             'id', 'nro_equipo', 'tipo',
             'alimentador_codigo', 'subestacion_codigo',
             'estado_seccionador', 'cuchillas_laterales',
-            'tiene_problema_actual',
+            'tiene_problema_actual', 'fecha_ultima_verificacion',
         )
 
     def get_tipo(self, obj):
@@ -53,5 +53,6 @@ class SitioSerializer(GeoFeatureModelSerializer):
         return 'REGULADOR'
 
     def get_componente_id(self, obj):
-        comp = obj.componentes.first()
-        return str(comp.id) if comp else None
+        # Usa el prefetch de la vista (evita una consulta por sitio)
+        componentes = list(obj.componentes.all())
+        return str(componentes[0].id) if componentes else None
