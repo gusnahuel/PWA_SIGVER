@@ -84,3 +84,20 @@ export function calcularDistanciaMetros(lat1, lon1, lat2, lon2) {
 
     return R * c;
 }
+
+// Ensayos PAT: los datos viajan como JSON y la foto de cada ensayo aparte,
+// como foto_pat_<id_ensayo> (así lo lee el servidor). Lo usan el envío directo y la cola.
+export function agregarEnsayosPat(formData, ensayos) {
+    if (!ensayos?.length) return;
+    formData.append('ensayos_pat', JSON.stringify(ensayos.map(({ foto, ...datos }) => datos)));
+    ensayos.forEach((e) => { if (e.foto) formData.append(`foto_pat_${e.id_ensayo}`, e.foto); });
+}
+
+// Nivel termográfico según ΔT (°C). Misma regla que el servidor
+// (operaciones/models.py, nivel_termografico), que es el que decide al guardar.
+export function nivelTermografico(delta) {
+    if (delta === null || delta === undefined || Number.isNaN(delta)) return '';
+    if (delta <= 10) return 'Nivel 1';
+    if (delta <= 20) return 'Nivel 2';
+    return delta <= 40 ? 'Nivel 3' : 'Nivel 4';
+}

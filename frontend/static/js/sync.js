@@ -2,10 +2,11 @@
  * SIGVER - Trabajo sin conexión: cola de verificaciones (IndexedDB), contadores
  * de pendientes, estado de la conexión y sincronización automática.
  */
-import { guardarVerificacionOffline, obtenerPendientes, eliminarDeOutbox } from './db.js?v=121';
-import { fetchConTimeout, describirErrorServidor } from './api.js?v=121';
-import { ponerBadge, registrarAcciones, showToast } from './ui.js?v=121';
-import { estado } from './estado.js?v=121';
+import { guardarVerificacionOffline, obtenerPendientes, eliminarDeOutbox } from './db.js?v=122';
+import { fetchConTimeout, describirErrorServidor } from './api.js?v=122';
+import { ponerBadge, registrarAcciones, showToast } from './ui.js?v=122';
+import { estado } from './estado.js?v=122';
+import { agregarEnsayosPat } from './util.js?v=122';
 
 let isSyncing = false;
 let cantidadPendientes = 0;
@@ -82,7 +83,7 @@ function armarFormData(payload) {
         if (payload.foto_entorno) formData.append('foto_entorno', payload.foto_entorno);
         if (payload.foto_control_unico) formData.append('foto_control_unico', payload.foto_control_unico);
         if (payload.mediciones_termografia) formData.append('mediciones_termografia', JSON.stringify(payload.mediciones_termografia));
-        if (payload.ensayos_pat) formData.append('ensayos_pat', JSON.stringify(payload.ensayos_pat));
+        agregarEnsayosPat(formData, payload.ensayos_pat);
         return { endpoint: '/api/operaciones/verificaciones/', formData };
     }
 

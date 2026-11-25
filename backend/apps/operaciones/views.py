@@ -234,6 +234,8 @@ def generar_informe_pdf(request, tipo, id):
         contexto = {'tipo': 'REGULADOR', 'nombre_tipo': 'Regulador de tensión',
                     'mediciones': verificacion.mediciones_termografia.select_related('punto').order_by('fecha_hora'),
                     'ensayos': verificacion.ensayos_pat.prefetch_related('lecturas')}
+        fotos += [(f'Ensayo PAT {n}', imagen_a_base64(e.foto))
+                  for n, e in enumerate(contexto['ensayos'], start=1) if e.foto]
     else:
         raise Http404('Tipo de informe desconocido.')
 

@@ -2,17 +2,19 @@
  * SIGVER - Verificación de regulador: formulario en 4 pasos (datos y GPS,
  * fotos, mediciones, reclamo/resumen). Sin señal se guarda en la cola offline.
  */
-import { guardarVerificacionOffline } from './db.js?v=121';
-import { datosGps, seguirUbicacion, sugerirCoincidencia } from './gps.js?v=121';
-import { estado } from './estado.js?v=121';
-import { fetchConTimeout, esErrorDeRed, describirErrorServidor } from './api.js?v=121';
-import { comprimirImagen, escapeHtml, generarIdLocal, generarUUID } from './util.js?v=121';
+import { guardarVerificacionOffline } from './db.js?v=122';
+import { datosGps, seguirUbicacion, sugerirCoincidencia } from './gps.js?v=122';
+import { estado } from './estado.js?v=122';
+import { fetchConTimeout, esErrorDeRed, describirErrorServidor } from './api.js?v=122';
+import {
+    agregarEnsayosPat, comprimirImagen, escapeHtml, generarIdLocal, generarUUID, nivelTermografico,
+} from './util.js?v=122';
 import {
     abrirPanel, avisarSoloCelular, cerrarPanel, cerrarPopupsMapa, esEscritorio,
     repintarSegmentados, showToast,
-} from './ui.js?v=121';
-import { actualizarContadorPendientes } from './sync.js?v=121';
-import { obtenerEnsayosPat, obtenerTermografias, reiniciarMediciones } from './mediciones.js?v=121';
+} from './ui.js?v=122';
+import { actualizarContadorPendientes } from './sync.js?v=122';
+import { obtenerEnsayosPat, obtenerTermografias, reiniciarMediciones } from './mediciones.js?v=122';
 
 const TOTAL_PASOS = 4;
 const FOTOS_REGULADOR = ['reg-foto-frontal', 'reg-foto-entorno', 'reg-foto-control'];
@@ -153,13 +155,14 @@ function actualizarResumenRegulador() {
     const ensayos = obtenerEnsayosPat();
     const deltas = termografias.map((t) => t.delta_temperatura_c).filter((d) => d !== null && d !== undefined);
     const maxDelta = deltas.length ? Math.max(...deltas) : null;
+    const nivelMax = nivelTermografico(maxDelta);
     const fotos = contarFotosRegulador();
     const filas = [
         ['Estado del sitio', textoSelect('reg-estado-sitio')],
         ['Ubicación coincide', textoSelect('reg-ubicacion-coincide')],
         ['Fotos', `${fotos} de 3`],
         ['Termografía', termografias.length
-            ? `${termografias.length} punto(s)${maxDelta !== null ? ` · máx. Δ ${String(maxDelta).replace('.', ',')}°` : ''}`
+            ? `${termografias.length} punto(s)${maxDelta !== null ? ` · máx. Δ ${String(maxDelta).replace('.', ',')}° (${nivelMax})` : ''}`
             : 'Sin mediciones'],
         ['Ensayo PAT', ensayos.length
             ? ensayos.map((e) => e.resultado.replace('_', ' ').toLowerCase()).join(', ')
@@ -221,7 +224,7 @@ document.getElementById('form-regulador').addEventListener('submit', async (e) =
     if (fotoEntorno) formData.append('foto_entorno', fotoEntorno);
     if (fotoControl) formData.append('foto_control_unico', fotoControl);
     if (termografias.length > 0) formData.append('mediciones_termografia', JSON.stringify(termografias));
-    if (ensayos.length > 0) formData.append('ensayos_pat', JSON.stringify(ensayos));
+    agregarEnsayosPat(formData, ensayos);
 
     let guardadoExitoso = false;
     try {

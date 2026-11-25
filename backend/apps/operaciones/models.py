@@ -3,6 +3,7 @@ SIGVER - Modelos Operativos
 Verificaciones, mediciones, ensayos y reclamos.
 """
 import uuid
+from decimal import Decimal
 
 from django.conf import settings
 from django.contrib.gis.db import models as gis_models
@@ -275,6 +276,21 @@ class PuntoInspeccionTermografia(models.Model):
         return f"{self.id_punto} - {self.fase} - {self.get_tipo_elemento_display()}"
 
 
+# Nivel termográfico según ΔT = temperatura del punto - ambiente (°C).
+# Regla del Excel de levantamiento: ≤10 Nivel 1, 11-20 Nivel 2, 21-40 Nivel 3, >40 Nivel 4.
+# Un valor con decimales entre dos tramos pasa al nivel siguiente (10,5 °C -> Nivel 2).
+TOPES_NIVEL_TERMOGRAFICO = ((10, 'Nivel 1'), (20, 'Nivel 2'), (40, 'Nivel 3'))
+
+
+def nivel_termografico(delta):
+    if delta is None:
+        return ''
+    for tope, nivel in TOPES_NIVEL_TERMOGRAFICO:
+        if delta <= tope:
+            return nivel
+    return 'Nivel 4'
+
+
 class MedicionTermografia(models.Model):
     """Medición termográfica realizada en un punto específico."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -310,8 +326,11 @@ class MedicionTermografia(models.Model):
         ('Nivel 1', 'Nivel 1'),
         ('Nivel 2', 'Nivel 2'),
         ('Nivel 3', 'Nivel 3'),
+        ('Nivel 4', 'Nivel 4'),
     ]
-    nivel_termografico = models.CharField(max_length=20, choices=NIVEL, blank=True)
+    nivel_termografico = models.CharField(
+        max_length=20, choices=NIVEL, blank=True,
+        help_text='Se calcula solo con las dos temperaturas: ΔT ≤10 °C Nivel 1, ≤20 Nivel 2, ≤40 Nivel 3, >40 Nivel 4.')
     observaciones = models.TextField(blank=True)
 
     class Meta:
@@ -321,6 +340,13 @@ class MedicionTermografia(models.Model):
 
     def __str__(self):
         return f"Medición {self.id_medicion}"
+
+    def save(self, *args, **kwargs):
+        # ΔT y nivel salen de las temperaturas: no se cargan a mano
+        if self.temperatura_punto_c is not None and self.temperatura_ambiente_c is not None:
+            self.delta_temperatura_c = Decimal(self.temperatura_punto_c) - Decimal(self.temperatura_ambiente_c)
+            self.nivel_termografico = nivel_termografico(self.delta_temperatura_c)
+        super().save(*args, **kwargs)
 
 
 # =====================================================

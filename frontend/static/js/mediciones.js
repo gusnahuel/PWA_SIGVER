@@ -2,14 +2,15 @@
  * SIGVER - Mediciones del formulario de reguladores (paso 3):
  * termografías y ensayos de puesta a tierra (PAT), con alta, edición y borrado.
  */
-import { fetchConToken } from './api.js?v=121';
-import { escapeHtml, generarIdLocal } from './util.js?v=121';
-import { abrirModal, cerrarModal, registrarAcciones } from './ui.js?v=121';
+import { fetchConToken } from './api.js?v=122';
+import { comprimirImagen, escapeHtml, generarIdLocal, nivelTermografico } from './util.js?v=122';
+import { abrirModal, cerrarModal, registrarAcciones } from './ui.js?v=122';
 
 let termografias = [];
 let indiceEdicionTermografia = -1; // -1 = agregando una nueva
 let ensayosPat = [];
 let lecturasTemporales = [];       // lecturas del ensayo que se está editando en el modal
+let fotoPatTemporal = null;        // foto (ya comprimida) del ensayo que se está editando
 let indiceEdicionPat = -1;
 
 // Copias para el envío y el resumen (el formulario no modifica las listas)
@@ -24,6 +25,9 @@ export function reiniciarMediciones() {
     actualizarListaEnsayosPat();
 }
 
+const coma = (n) => String(n).replace('.', ',');
+const CLASE_NIVEL = { 'Nivel 1': 'n1', 'Nivel 2': 'n2', 'Nivel 3': 'n3', 'Nivel 4': 'n4' };
+const COLOR_NIVEL = { 'Nivel 1': 'var(--success)', 'Nivel 2': 'var(--warning)', 'Nivel 3': '#b91c1c', 'Nivel 4': '#b91c1c' };
 
 // ==========================================
 // Termografía
@@ -41,18 +45,55 @@ export async function cargarPuntosTermografia() {
     }
 }
 
-function llenarSelectPuntos() {
+const NOMBRE_ELEMENTO = {
+    Seccionador_ByPass: 'Seccionador bypass',
+    Seccionador_Equipo_LadoLinea: 'Seccionador lado línea',
+    Seccionador_Equipo_LadoEquipo: 'Seccionador lado equipo',
+    Bushing: 'Bushing',
+    Conector_Descargador_Linea: 'Conector descargador línea',
+    Conector_Descargador_Regulador: 'Conector descargador regulador',
+    Otros: 'Otros',
+};
+const NOMBRE_LADO = { Fuente: 'fuente', Carga: 'carga', Comun: 'común' };
+
+// Puntos agrupados por fase; los que ya se midieron en esta verificación quedan marcados
+function llenarSelectPuntos(actual = '') {
     const select = document.getElementById('term-punto');
-    if (select.options.length > 0) return;
-    const puntos = localStorage.getItem('sigver_puntos_ter');
-    if (!puntos) {
-        select.innerHTML = '<option value="">Error al cargar puntos</option>';
+    const guardados = localStorage.getItem('sigver_puntos_ter');
+    if (!guardados) {
+        select.innerHTML = '<option value="">No se pudieron cargar los puntos (abrí la app con señal)</option>';
         return;
     }
-    select.innerHTML = '<option value="">Seleccione un punto...</option>' + JSON.parse(puntos)
-        .map((p) => `<option value="${escapeHtml(p.id_punto)}">${escapeHtml(p.id_punto)} - Fase ${escapeHtml(p.fase)} (${escapeHtml(p.tipo_elemento)})</option>`)
-        .join('');
+    const medidos = new Set(termografias.map((t) => t.punto).filter((p) => p !== actual));
+    const porFase = {};
+    JSON.parse(guardados).filter((p) => p.activo !== false).forEach((p) => {
+        (porFase[p.fase] ||= []).push(p);
+    });
+    select.innerHTML = '<option value="">Elegí un punto...</option>' + Object.keys(porFase).sort().map((fase) => `
+        <optgroup label="Fase ${escapeHtml(fase)}">${porFase[fase].map((p) => {
+            const lado = NOMBRE_LADO[p.lado_conexion] ? ` (${NOMBRE_LADO[p.lado_conexion]})` : '';
+            const texto = `${p.id_punto} · ${NOMBRE_ELEMENTO[p.tipo_elemento] || p.tipo_elemento}${lado}${medidos.has(p.id_punto) ? ' ✓ medido' : ''}`;
+            return `<option value="${escapeHtml(p.id_punto)}">${escapeHtml(texto)}</option>`;
+        }).join('')}</optgroup>`).join('');
+    select.value = actual;
 }
+
+function deltaDelModal() {
+    const punto = document.getElementById('term-temp-punto').value;
+    const ambiente = document.getElementById('term-temp-amb').value;
+    if (punto === '' || ambiente === '') return null;
+    return Math.round((parseFloat(punto) - parseFloat(ambiente)) * 10) / 10;
+}
+
+// Muestra en el modal el ΔT y el nivel mientras se cargan las temperaturas
+function mostrarNivelEnModal() {
+    const caja = document.getElementById('term-nivel');
+    const delta = deltaDelModal();
+    const nivel = nivelTermografico(delta);
+    caja.className = `nivel-termo ${CLASE_NIVEL[nivel] || ''}`;
+    caja.textContent = nivel ? `ΔT ${coma(delta)} °C · ${nivel}` : 'Cargá las dos temperaturas para ver el nivel';
+}
+['term-temp-punto', 'term-temp-amb'].forEach((id) => document.getElementById(id).addEventListener('input', mostrarNivelEnModal));
 
 function actualizarListaTermografias() {
     const n = termografias.length;
@@ -60,11 +101,12 @@ function actualizarListaTermografias() {
 
     document.getElementById('lista-termografias').innerHTML = termografias.map((t, index) => {
         const delta = t.delta_temperatura_c;
-        const color = delta === null || delta === undefined ? 'var(--text-muted)' : delta >= 10 ? '#b91c1c' : delta >= 5 ? '#b45309' : 'var(--success)';
+        const nivel = nivelTermografico(delta);
         const detalle = [
-            `${String(t.temperatura_punto_c).replace('.', ',')} °C`,
-            t.temperatura_ambiente_c !== null ? `amb. ${String(t.temperatura_ambiente_c).replace('.', ',')} °C` : null,
+            `${coma(t.temperatura_punto_c)} °C`,
+            t.temperatura_ambiente_c !== null ? `amb. ${coma(t.temperatura_ambiente_c)} °C` : null,
             t.corriente_a !== null ? `${t.corriente_a} A` : null,
+            t.observaciones || null,
         ].filter(Boolean).join(' · ');
         return `
             <div class="medicion-item">
@@ -72,7 +114,8 @@ function actualizarListaTermografias() {
                     <div class="med-titulo">${escapeHtml(t.punto)}</div>
                     <div class="med-sub">${escapeHtml(detalle)}</div>
                 </div>
-                <div class="med-delta" style="color: ${color};">${delta !== null && delta !== undefined ? 'Δ ' + escapeHtml(String(delta).replace('.', ',')) + '°' : ''}</div>
+                <div class="med-delta" style="color: ${COLOR_NIVEL[nivel] || 'var(--text-muted)'};">${nivel
+                    ? `Δ ${escapeHtml(coma(delta))}°<br><small>${escapeHtml(nivel)}</small>` : ''}</div>
                 <button type="button" class="icon-action" data-accion="editar-termografia" data-indice="${index}" aria-label="Editar"><i class="fa-solid fa-pen" aria-hidden="true"></i></button>
                 <button type="button" class="icon-action danger" data-accion="eliminar-termografia" data-indice="${index}" aria-label="Eliminar"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>
             </div>`;
@@ -81,10 +124,11 @@ function actualizarListaTermografias() {
 
 document.getElementById('btn-add-termografia').addEventListener('click', () => {
     indiceEdicionTermografia = -1;
-    ['term-temp-punto', 'term-temp-amb', 'term-corriente', 'term-punto'].forEach((id) => {
+    ['term-temp-punto', 'term-temp-amb', 'term-corriente', 'term-observaciones'].forEach((id) => {
         document.getElementById(id).value = '';
     });
     llenarSelectPuntos();
+    mostrarNivelEnModal();
     abrirModal('modal-termografia');
 });
 
@@ -97,11 +141,11 @@ document.getElementById('btn-guardar-term').addEventListener('click', () => {
     const corriente = document.getElementById('term-corriente').value;
 
     if (!punto || !tempPunto) {
-        alert('Por favor, selecciona un punto y la temperatura.');
+        alert('Elegí un punto y cargá su temperatura.');
         return;
     }
 
-    const delta = tempPunto && tempAmb ? (parseFloat(tempPunto) - parseFloat(tempAmb)).toFixed(1) : null;
+    // ΔT y nivel se muestran acá; el servidor los vuelve a calcular al guardar
     const medicion = {
         id_medicion: indiceEdicionTermografia === -1 ? generarIdLocal('TERM') : termografias[indiceEdicionTermografia].id_medicion,
         punto,
@@ -109,9 +153,8 @@ document.getElementById('btn-guardar-term').addEventListener('click', () => {
         corriente_a: corriente ? parseFloat(corriente) : null,
         temperatura_ambiente_c: tempAmb ? parseFloat(tempAmb) : null,
         temperatura_punto_c: parseFloat(tempPunto),
-        delta_temperatura_c: delta ? parseFloat(delta) : null,
-        nivel_termografico: 'Nivel 1',
-        observaciones: ''
+        delta_temperatura_c: deltaDelModal(),
+        observaciones: document.getElementById('term-observaciones').value.trim(),
     };
 
     if (indiceEdicionTermografia === -1) termografias.push(medicion);
@@ -124,11 +167,12 @@ document.getElementById('btn-guardar-term').addEventListener('click', () => {
 function editarTermografia(index) {
     indiceEdicionTermografia = index;
     const term = termografias[index];
-    llenarSelectPuntos();
-    document.getElementById('term-punto').value = term.punto;
+    llenarSelectPuntos(term.punto);
     document.getElementById('term-temp-punto').value = term.temperatura_punto_c;
-    document.getElementById('term-temp-amb').value = term.temperatura_ambiente_c || '';
-    document.getElementById('term-corriente').value = term.corriente_a || '';
+    document.getElementById('term-temp-amb').value = term.temperatura_ambiente_c ?? '';
+    document.getElementById('term-corriente').value = term.corriente_a ?? '';
+    document.getElementById('term-observaciones').value = term.observaciones || '';
+    mostrarNivelEnModal();
     abrirModal('modal-termografia');
 }
 
@@ -142,6 +186,8 @@ function eliminarTermografia(index) {
 // ==========================================
 // Ensayos PAT (puesta a tierra)
 // ==========================================
+const NOMBRE_LECTURA = { MEDICION: 'Medición', VALIDACION: 'Validación' };
+
 function actualizarListaTemporalLecturas() {
     const div = document.getElementById('lista-lecturas-modal');
     if (lecturasTemporales.length === 0) {
@@ -149,7 +195,7 @@ function actualizarListaTemporalLecturas() {
         return;
     }
     div.innerHTML = lecturasTemporales.map((l, idx) => `
-        <div class="item-row" style="background: var(--surface);"><span>${escapeHtml(l.distancia_m)} m: <b>${escapeHtml(l.valor_ohm)} Ω</b></span>
+        <div class="item-row" style="background: var(--surface);"><span>${escapeHtml(NOMBRE_LECTURA[l.tipo_lectura] || l.tipo_lectura)} · ${escapeHtml(l.distancia_m)} m: <b>${escapeHtml(coma(l.valor_ohm))} Ω</b></span>
             <button type="button" class="icon-action danger" data-accion="eliminar-lectura" data-indice="${idx}" aria-label="Eliminar lectura"><i class="fa-solid fa-trash" aria-hidden="true"></i></button></div>`).join('');
 }
 
@@ -170,26 +216,60 @@ function actualizarListaEnsayosPat() {
         const valores = e.lecturas.map((l) => l.valor_ohm).filter((v) => typeof v === 'number');
         const minimo = valores.length ? Math.min(...valores) : null;
         const detalle = [e.metodo_pat, e.condicion_suelo ? `suelo ${String(e.condicion_suelo).toLowerCase()}` : null,
-            `${e.lecturas.length} lectura(s)`].filter(Boolean).join(' · ');
+            `${e.lecturas.length} lectura(s)`, e.foto ? 'con foto' : null].filter(Boolean).join(' · ');
         return `
             <div class="medicion-item">
                 <div class="med-texto">
                     <div class="med-titulo">Ensayo ${index + 1}</div>
                     <div class="med-sub">${escapeHtml(detalle)}</div>
                 </div>
-                <div class="med-delta" style="color: var(--ande-blue);">${minimo !== null ? escapeHtml(String(minimo).replace('.', ',')) + ' Ω' : ''}</div>
+                <div class="med-delta" style="color: var(--ande-blue);">${minimo !== null ? escapeHtml(coma(minimo)) + ' Ω' : ''}</div>
                 <button type="button" class="icon-action" data-accion="editar-ensayo-pat" data-indice="${index}" aria-label="Editar"><i class="fa-solid fa-pen" aria-hidden="true"></i></button>
                 <button type="button" class="icon-action danger" data-accion="eliminar-ensayo-pat" data-indice="${index}" aria-label="Eliminar"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>
             </div>`;
     }).join('');
 }
 
+function elegirTipoLectura(valor) {
+    const select = document.getElementById('pat-lect-tipo');
+    select.value = valor;
+    select.dispatchEvent(new Event('change'));   // repinta los botones
+}
+
+function mostrarFotoPat(foto) {
+    const preview = document.getElementById('pat-foto-preview');
+    if (preview.src.startsWith('blob:')) URL.revokeObjectURL(preview.src);
+    if (foto) {
+        preview.src = URL.createObjectURL(foto);
+        preview.style.display = 'block';
+    } else {
+        preview.removeAttribute('src');
+        preview.style.display = 'none';
+    }
+}
+
+document.getElementById('pat-foto').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+        fotoPatTemporal = await comprimirImagen(file);
+    } catch (err) {
+        console.error('Error comprimiendo la foto del ensayo:', err);
+        fotoPatTemporal = file;
+    }
+    mostrarFotoPat(fotoPatTemporal);
+    e.target.value = '';   // permite volver a elegir la misma foto
+});
+
 document.getElementById('btn-add-pat').addEventListener('click', () => {
     indiceEdicionPat = -1;
     lecturasTemporales = [];
-    ['pat-metodo', 'pat-equipo', 'pat-lect-dist', 'pat-lect-val'].forEach((id) => {
+    fotoPatTemporal = null;
+    ['pat-metodo', 'pat-equipo', 'pat-temp-amb', 'pat-observaciones', 'pat-lect-dist', 'pat-lect-val'].forEach((id) => {
         document.getElementById(id).value = '';
     });
+    elegirTipoLectura('MEDICION');
+    mostrarFotoPat(null);
     document.getElementById('lista-lecturas-modal').innerHTML = '';
     abrirModal('modal-pat');
 });
@@ -200,15 +280,15 @@ document.getElementById('btn-add-lectura').addEventListener('click', () => {
     const dist = document.getElementById('pat-lect-dist').value;
     const val = document.getElementById('pat-lect-val').value;
     if (!dist || !val) {
-        alert('Por favor, completa distancia y valor de la lectura.');
+        alert('Completá la distancia y el valor de la lectura.');
         return;
     }
     lecturasTemporales.push({
         id_lectura: generarIdLocal('LECT'),
-        tipo_lectura: 'MEDICION',
+        tipo_lectura: document.getElementById('pat-lect-tipo').value,
         distancia_m: parseInt(dist, 10),
         valor_ohm: parseFloat(val),
-        observaciones: ''
+        observaciones: '',
     });
     document.getElementById('pat-lect-dist').value = '';
     document.getElementById('pat-lect-val').value = '';
@@ -217,17 +297,21 @@ document.getElementById('btn-add-lectura').addEventListener('click', () => {
 
 document.getElementById('btn-guardar-pat').addEventListener('click', () => {
     if (lecturasTemporales.length === 0) {
-        alert('Debes agregar al menos una lectura para guardar el ensayo PAT.');
+        alert('Agregá al menos una lectura para guardar el ensayo.');
         return;
     }
+    const temperatura = document.getElementById('pat-temp-amb').value;
     const ensayo = {
         id_ensayo: indiceEdicionPat === -1 ? generarIdLocal('PAT') : ensayosPat[indiceEdicionPat].id_ensayo,
         fecha_ensayo: new Date().toISOString(),
         metodo_pat: document.getElementById('pat-metodo').value,
         equipo_medicion: document.getElementById('pat-equipo').value,
+        temperatura_ambiente_c: temperatura ? parseFloat(temperatura) : null,
         condicion_suelo: document.getElementById('pat-suelo').value,
         resultado: document.getElementById('pat-resultado').value,
-        lecturas: [...lecturasTemporales]
+        observaciones: document.getElementById('pat-observaciones').value.trim(),
+        lecturas: [...lecturasTemporales],
+        foto: fotoPatTemporal,   // se envía aparte (ver agregarEnsayosPat en util.js)
     };
 
     if (indiceEdicionPat === -1) ensayosPat.push(ensayo);
@@ -242,8 +326,13 @@ function editarEnsayoPat(index) {
     const ensayo = ensayosPat[index];
     document.getElementById('pat-metodo').value = ensayo.metodo_pat;
     document.getElementById('pat-equipo').value = ensayo.equipo_medicion;
+    document.getElementById('pat-temp-amb').value = ensayo.temperatura_ambiente_c ?? '';
     document.getElementById('pat-suelo').value = ensayo.condicion_suelo;
     document.getElementById('pat-resultado').value = ensayo.resultado;
+    document.getElementById('pat-observaciones').value = ensayo.observaciones || '';
+    elegirTipoLectura('MEDICION');
+    fotoPatTemporal = ensayo.foto || null;
+    mostrarFotoPat(fotoPatTemporal);
     lecturasTemporales = [...ensayo.lecturas];
     actualizarListaTemporalLecturas();
     abrirModal('modal-pat');

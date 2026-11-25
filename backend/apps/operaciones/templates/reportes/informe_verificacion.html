@@ -321,12 +321,12 @@
         {% for m in mediciones %}
         <tr>
             <td><b>{{ m.punto.id_punto|default:"—" }}</b>{% if m.punto %} · fase {{ m.punto.fase }}{% endif %}</td>
-            <td>{% if m.punto %}{{ m.punto.get_tipo_elemento_display }}{% if m.punto.lado_conexion != 'N/A' %} ({{ m.punto.get_lado_conexion_display|lower }}){% endif %}{% else %}—{% endif %}</td>
+            <td>{% if m.punto %}{{ m.punto.get_tipo_elemento_display }}{% if m.punto.lado_conexion != 'N/A' %} ({{ m.punto.get_lado_conexion_display|lower }}){% endif %}{% else %}—{% endif %}{% if m.observaciones %}<br><i>{{ m.observaciones }}</i>{% endif %}</td>
             <td class="num">{% if m.corriente_a is not None %}{{ m.corriente_a|floatformat:1 }} A{% else %}—{% endif %}</td>
             <td class="num">{% if m.temperatura_punto_c is not None %}{{ m.temperatura_punto_c|floatformat:1 }} °C{% else %}—{% endif %}</td>
             <td class="num">{% if m.temperatura_ambiente_c is not None %}{{ m.temperatura_ambiente_c|floatformat:1 }} °C{% else %}—{% endif %}</td>
             <td class="num"><b>{% if m.delta_temperatura_c is not None %}{{ m.delta_temperatura_c|floatformat:1 }} °C{% else %}—{% endif %}</b></td>
-            <td>{% if m.nivel_termografico %}<span class="insignia {% if m.nivel_termografico == 'Nivel 3' %}peligro{% elif m.nivel_termografico == 'Nivel 2' %}aviso{% else %}ok{% endif %}">{{ m.nivel_termografico }}</span>{% else %}—{% endif %}</td>
+            <td>{% if m.nivel_termografico %}<span class="insignia {% if m.nivel_termografico == 'Nivel 3' or m.nivel_termografico == 'Nivel 4' %}peligro{% elif m.nivel_termografico == 'Nivel 2' %}aviso{% else %}ok{% endif %}">{{ m.nivel_termografico }}</span>{% else %}—{% endif %}</td>
         </tr>
         {% endfor %}
         </tbody>

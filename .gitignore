@@ -75,6 +75,8 @@ redisdata/
 *.swp
 *.swo
 *~
+.vscode/
+.codegraph/
 
 # ==========================================
 # Sistema operativo

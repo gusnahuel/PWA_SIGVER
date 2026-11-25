@@ -726,6 +726,12 @@ input[type="file"].form-control { padding: 10px; font-size: 14px; }
 .lecturas-inputs { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 10px; }
 .lecturas-inputs > div { flex: 1; min-width: 0; }
 .lecturas-inputs label { font-size: 12px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px; }
+/* Nivel termográfico calculado en el modal (mismos tonos que la lista) */
+.nivel-termo { font-size: 13px; font-weight: 600; color: var(--text-muted); background: var(--surface-muted);
+    border-radius: var(--radius-sm); padding: 8px 12px; margin-bottom: 16px; }
+.nivel-termo.n1 { color: var(--success); }
+.nivel-termo.n2 { color: var(--warning); }
+.nivel-termo.n3, .nivel-termo.n4 { color: #b91c1c; }
 .lecturas-lista {
     font-size: 13px;
     background: var(--surface-muted);

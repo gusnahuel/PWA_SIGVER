@@ -4,6 +4,7 @@ SIGVER - Serializers de Operaciones
 import json
 from datetime import timedelta
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
@@ -177,6 +178,8 @@ class MedicionTermografiaSerializer(serializers.ModelSerializer):
         fields = ('id_medicion', 'punto', 'fecha_hora', 'corriente_a',
                   'temperatura_ambiente_c', 'temperatura_punto_c',
                   'delta_temperatura_c', 'nivel_termografico', 'observaciones')
+        # Los calcula el servidor con las temperaturas (MedicionTermografia.save)
+        read_only_fields = ('delta_temperatura_c', 'nivel_termografico')
 
 
 class PuntoInspeccionTermografiaSerializer(serializers.ModelSerializer):
@@ -307,8 +310,17 @@ class VerificacionSerializer(ResponsableDesdeUsuarioMixin, DatosDeCampoMixin, se
                 **med_data,
             )
 
+        archivos = self.context['request'].FILES
         for ensayo_data in ensayos_data:
             lecturas_data = ensayo_data.pop('lecturas', [])
+            # La foto de cada ensayo llega aparte (el ensayo viaja como JSON): foto_pat_<id_ensayo>
+            foto = archivos.get(f"foto_pat_{ensayo_data['id_ensayo']}")
+            if foto:
+                try:
+                    ensayo_data['foto'] = serializers.ImageField().to_internal_value(foto)
+                except (serializers.ValidationError, DjangoValidationError):
+                    raise serializers.ValidationError(
+                        {'ensayos_pat': 'La foto del ensayo PAT no es una imagen válida.'})
             ensayo = EnsayoPAT.objects.create(
                 verificacion=verificacion,
                 componente=verificacion.componente,

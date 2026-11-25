@@ -23,7 +23,7 @@ from apps.usuarios.models import Usuario
 from . import reclamos
 from .models import (
     EnsayoPAT, HistorialReclamo, LecturaPAT, MedicionTermografia, PuntoInspeccionTermografia,
-    Reclamo, Verificacion, VerificacionETC,
+    Reclamo, Verificacion, VerificacionETC, nivel_termografico,
 )
 
 
@@ -1018,3 +1018,67 @@ class InformePDFTests(BaseSigverTest):
         self.client.force_login(staff)
         self.assertEqual(self.client.get(reverse('generar_pdf', args=['etc', uuid.uuid4()])).status_code, 404)
         self.assertEqual(self.client.get(reverse('generar_pdf', args=['otro', uuid.uuid4()])).status_code, 404)
+
+
+class MedicionesTests(BaseSigverTest):
+    """Niveles termográficos (regla del Excel) y datos completos del ensayo PAT."""
+    url = '/api/operaciones/verificaciones/'
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._media = tempfile.mkdtemp()
+        cls._override = override_settings(MEDIA_ROOT=cls._media)
+        cls._override.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._override.disable()
+        shutil.rmtree(cls._media, ignore_errors=True)
+        super().tearDownClass()
+
+    def test_regla_de_niveles(self):
+        casos = {-5: 'Nivel 1', 0: 'Nivel 1', 10: 'Nivel 1', 10.5: 'Nivel 2', 11: 'Nivel 2', 20: 'Nivel 2',
+                 21: 'Nivel 3', 40: 'Nivel 3', 40.1: 'Nivel 4', 80: 'Nivel 4', None: ''}
+        for delta, nivel in casos.items():
+            self.assertEqual(nivel_termografico(delta), nivel, delta)
+
+    def test_el_servidor_calcula_delta_y_nivel(self):
+        termos = [{
+            'id_medicion': 'TERM-NIV-1', 'punto': 'P-TST', 'fecha_hora': timezone.now().isoformat(),
+            'temperatura_punto_c': 75, 'temperatura_ambiente_c': 30, 'observaciones': 'conector oxidado',
+            # lo que mande el celular no cuenta
+            'delta_temperatura_c': 1, 'nivel_termografico': 'Nivel 1',
+        }]
+        datos = self.datos_regulador(mediciones_termografia=json.dumps(termos))
+        res = self.cliente(self.tecnico).post(self.url, datos, format='multipart')
+        self.assertEqual(res.status_code, 201, res.data)
+        m = MedicionTermografia.objects.get(id_medicion='TERM-NIV-1')
+        self.assertEqual((m.delta_temperatura_c, m.nivel_termografico, m.observaciones),
+                         (45, 'Nivel 4', 'conector oxidado'))
+
+    def test_ensayo_pat_con_foto_temperatura_y_validacion(self):
+        ensayos = [{
+            'id_ensayo': 'PAT-FOTO-1', 'fecha_ensayo': timezone.now().isoformat(), 'resultado': 'PENDIENTE',
+            'condicion_suelo': 'Húmedo', 'metodo_pat': 'Método 62%', 'temperatura_ambiente_c': 23,
+            'observaciones': 'promedio 105 Ω',
+            'lecturas': [
+                {'id_lectura': 'LECT-F-1', 'tipo_lectura': 'MEDICION', 'distancia_m': 20, 'valor_ohm': 106},
+                {'id_lectura': 'LECT-F-2', 'tipo_lectura': 'VALIDACION', 'distancia_m': 20, 'valor_ohm': 105},
+            ],
+        }]
+        datos = self.datos_regulador(ensayos_pat=json.dumps(ensayos), **{'foto_pat_PAT-FOTO-1': imagen_de_prueba()})
+        res = self.cliente(self.tecnico).post(self.url, datos, format='multipart')
+        self.assertEqual(res.status_code, 201, res.data)
+        e = EnsayoPAT.objects.get(id_ensayo='PAT-FOTO-1')
+        self.assertTrue(e.foto)
+        self.assertEqual((e.temperatura_ambiente_c, e.observaciones), (23, 'promedio 105 Ω'))
+        self.assertEqual(set(e.lecturas.values_list('tipo_lectura', flat=True)), {'MEDICION', 'VALIDACION'})
+
+    def test_foto_pat_que_no_es_imagen_se_rechaza(self):
+        ensayos = [{'id_ensayo': 'PAT-MALA', 'fecha_ensayo': timezone.now().isoformat(), 'lecturas': []}]
+        archivo = SimpleUploadedFile('x.jpg', b'no soy una imagen', content_type='image/jpeg')
+        datos = self.datos_regulador(ensayos_pat=json.dumps(ensayos), **{'foto_pat_PAT-MALA': archivo})
+        res = self.cliente(self.tecnico).post(self.url, datos, format='multipart')
+        self.assertEqual(res.status_code, 400)
+        self.assertFalse(Verificacion.objects.filter(client_uuid=datos['client_uuid']).exists())
