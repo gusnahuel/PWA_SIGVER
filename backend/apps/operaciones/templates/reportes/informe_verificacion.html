@@ -1,220 +1,427 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <style>
-        @page {
-            size: A4;
-            margin: 2cm;
-            @bottom-center {
-                content: "SIGVER - ANDE | Página " counter(page) " de " counter(pages);
-                font-size: 10px;
-                color: #666;
-            }
+<meta charset="UTF-8">
+<title>Acta de verificación {{ verificacion.id_verificacion }}</title>
+<style>
+    /* ------------------------------------------------------------------
+       Acta de verificación de campo (WeasyPrint, A4).
+       Mismos colores que la app (static/css/tokens.css); fuente Inter local.
+       ------------------------------------------------------------------ */
+    {% if fuente_inter %}
+    @font-face { font-family: "Inter"; font-weight: 100 900; src: url("file://{{ fuente_inter }}") format("woff2"); }
+    {% endif %}
+    {% if fuente_inter_ext %}
+    @font-face { font-family: "Inter"; font-weight: 100 900; src: url("file://{{ fuente_inter_ext }}") format("woff2");
+                 unicode-range: U+0100-024F, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0; }
+    {% endif %}
+
+    :root {
+        --azul: #002f6c;
+        --azul-suave: #e8eef7;
+        --amarillo: #f5b000;
+        --texto: #0f172a;
+        --texto-2: #475569;
+        --texto-3: #5b6779;
+        --linea: #d6dde7;
+        --ok: #047857;      --ok-bg: #d1fae5;
+        --aviso: #a34a07;   --aviso-bg: #ffedd5;
+        --peligro: #b91c1c; --peligro-bg: #fee2e2;
+        --neutro: #475569;  --neutro-bg: #e2e8f0;
+    }
+
+    @page {
+        size: A4;
+        margin: 20mm 16mm 18mm;
+        @top-left { content: "SIGVER · Acta " string(acta); font: 500 7.5pt "Inter", "DejaVu Sans", sans-serif; color: #5b6779; }
+        @top-right { content: string(equipo); font: 500 7.5pt "Inter", "DejaVu Sans", sans-serif; color: #5b6779; }
+        @bottom-left {
+            content: "Emitido el {{ fecha_actual|date:'d/m/Y H:i' }} por {{ emitido_por }}";
+            font: 7.5pt "Inter", "DejaVu Sans", sans-serif; color: #5b6779;
         }
-        body {
-            font-family: Arial, sans-serif;
-            font-size: 12px;
-            color: #333;
+        @bottom-right {
+            content: "Página " counter(page) " de " counter(pages);
+            font: 7.5pt "Inter", "DejaVu Sans", sans-serif; color: #5b6779;
         }
-        .header {
-            text-align: center;
-            border-bottom: 2px solid #002f6c;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
-        }
-        .header h1 {
-            color: #002f6c;
-            margin: 0;
-            font-size: 24px;
-        }
-        .header p {
-            margin: 5px 0 0 0;
-            font-size: 14px;
-            color: #666;
-        }
-        .info-box {
-            background: #f4f6f9;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }
-        .info-box table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .info-box td {
-            padding: 5px;
-        }
-        .info-box td strong {
-            color: #002f6c;
-        }
-        .section-title {
-            background: #002f6c;
-            color: white;
-            padding: 8px;
-            font-size: 14px;
-            font-weight: bold;
-            margin-top: 20px;
-            margin-bottom: 10px;
-        }
-        table.data-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-        }
-        table.data-table th, table.data-table td {
-            border: 1px solid #ccc;
-            padding: 8px;
-            text-align: left;
-        }
-        table.data-table th {
-            background: #e2e8f0;
-            color: #002f6c;
-        }
-        
-        .foto-full {
-            width: 50%;
-            max-height: 300px;
-            object-fit: cover;
-            margin-top: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        .footer {
-            margin-top: 50px;
-            text-align: center;
-            font-size: 10px;
-            color: #999;
-        }
-    </style>
+    }
+    /* La primera página ya tiene el encabezado completo */
+    @page :first { @top-left { content: none; } @top-right { content: none; } }
+
+    * { box-sizing: border-box; }
+    body {
+        margin: 0;
+        font-family: "Inter", "DejaVu Sans", sans-serif;
+        font-size: 9pt;
+        line-height: 1.45;
+        color: var(--texto);
+        font-variant-numeric: tabular-nums;
+    }
+    .marca-acta { string-set: acta content(); }
+    .marca-equipo { string-set: equipo content(); }
+
+    /* ---------- Encabezado ---------- */
+    .encabezado {
+        display: flex;
+        align-items: stretch;
+        padding-bottom: 5mm;
+        border-bottom: 1.2pt solid var(--azul);
+        position: relative;
+    }
+    .encabezado::after {   /* filete amarillo institucional */
+        content: ""; position: absolute; left: 0; bottom: -2.6pt; width: 28mm; height: 2.6pt; background: var(--amarillo);
+    }
+    .logo { width: 15mm; height: 15mm; border-radius: 2.5mm; margin-right: 5mm; flex: none; }
+    .titulo { flex: 1; padding-right: 4mm; }
+    .institucion { font-size: 7.5pt; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--texto-3); }
+    h1 { margin: 1mm 0 0; font-size: 16pt; font-weight: 700; letter-spacing: -.01em; color: var(--azul); line-height: 1.15; }
+    .subtitulo { font-size: 10pt; color: var(--texto-2); margin-top: .5mm; }
+    .numero {
+        width: 50mm; flex: none;
+        border: .8pt solid var(--linea);
+        border-radius: 2mm;
+        padding: 2.5mm 3.5mm;
+        text-align: right;
+    }
+    .numero .etq { font-size: 6.5pt; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--texto-3); }
+    .numero .val { font-size: 8.5pt; font-weight: 700; color: var(--texto); word-break: break-all; }
+    .numero .val + .etq { margin-top: 1.5mm; }
+
+    /* ---------- Veredicto ---------- */
+    .veredicto {
+        display: flex;
+        margin-top: 5mm;
+        border: .8pt solid var(--linea);
+        border-radius: 2mm;
+        overflow: hidden;
+    }
+    .veredicto .resultado { width: 58mm; padding: 4mm 4.5mm; border-left: 3pt solid; }
+    .resultado.ok { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); }
+    .resultado.aviso { border-color: var(--aviso); background: var(--aviso-bg); color: var(--aviso); }
+    .resultado.peligro { border-color: var(--peligro); background: var(--peligro-bg); color: var(--peligro); }
+    .resultado.neutro { border-color: var(--neutro); background: var(--neutro-bg); color: var(--neutro); }
+    .resultado .etq { font-size: 6.5pt; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; opacity: .85; }
+    .resultado .val { font-size: 16pt; font-weight: 700; line-height: 1.15; margin-top: .5mm; }
+    .resultado .det { font-size: 8pt; font-weight: 500; margin-top: 1mm; color: var(--texto); }
+    .veredicto .hechos { flex: 1; padding: 2.5mm 0 2.5mm 5mm; }
+    .hecho { display: inline-block; vertical-align: top; width: 49%; padding: 1.2mm 3mm 1.2mm 0; }
+
+    /* ---------- Secciones numeradas ---------- */
+    body { counter-reset: seccion; }
+    h2 {
+        counter-increment: seccion;
+        margin: 6mm 0 2.5mm;
+        font-size: 10.5pt;
+        font-weight: 700;
+        color: var(--azul);
+        padding-bottom: 1.5mm;
+        border-bottom: .6pt solid var(--linea);
+        page-break-after: avoid;
+    }
+    h2::before {
+        content: counter(seccion);
+        font-size: 8pt; font-weight: 700; color: #fff; background: var(--azul);
+        border-radius: 1mm; padding: .3mm 1.6mm; margin-right: 2.5mm;
+        position: relative; top: -.6pt;
+    }
+    h3 { margin: 4mm 0 1.5mm; font-size: 9pt; font-weight: 700; page-break-after: avoid; }
+    .seccion { page-break-inside: auto; }
+    .mantener { page-break-inside: avoid; }
+
+    /* Pares etiqueta/valor */
+    .datos { font-size: 0; }   /* sin espacios entre las celdas inline-block */
+    .dato { display: inline-block; vertical-align: top; width: 33.33%; padding: 1.2mm 3mm 1.2mm 0; font-size: 9pt; }
+    .dato.ancho { width: 66.66%; }
+    .dato.completo { width: 100%; }
+    .etq { display: block; font-size: 6.5pt; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--texto-3); }
+    .val { display: block; font-size: 9pt; font-weight: 500; }
+    .val.vacio { color: var(--texto-3); font-weight: 400; }
+    .mono { font-family: "DejaVu Sans Mono", monospace; font-size: 7.5pt; letter-spacing: -.01em; }
+
+    /* Tablas */
+    table { width: 100%; border-collapse: collapse; margin-top: 1mm; }
+    th {
+        text-align: left; font-size: 6.5pt; font-weight: 600; letter-spacing: .07em; text-transform: uppercase;
+        color: var(--texto-3); padding: 1.6mm 2mm; border-bottom: .8pt solid var(--azul); background: var(--azul-suave);
+    }
+    td { padding: 1.8mm 2mm; border-bottom: .5pt solid var(--linea); vertical-align: top; }
+    tr { page-break-inside: avoid; }
+    .num { text-align: right; white-space: nowrap; }
+    thead { display: table-header-group; }
+
+    /* Insignias con texto (el color nunca va solo) */
+    .insignia { display: inline-block; padding: .4mm 1.8mm; border-radius: 1mm; font-size: 7pt; font-weight: 700; }
+    .insignia.ok { background: var(--ok-bg); color: var(--ok); }
+    .insignia.aviso { background: var(--aviso-bg); color: var(--aviso); }
+    .insignia.peligro { background: var(--peligro-bg); color: var(--peligro); }
+    .insignia.neutro { background: var(--neutro-bg); color: var(--neutro); }
+
+    .nota { font-size: 8pt; color: var(--texto-2); margin: 1.5mm 0 0; }
+    .texto-libre { white-space: pre-line; margin: 0; }
+
+    /* Fotos */
+    .lamina { font-size: 0; }
+    figure { display: inline-block; vertical-align: top; margin: 0 0 4mm; width: 48.5%; page-break-inside: avoid; font-size: 9pt; }
+    figure:nth-child(odd) { margin-right: 3%; }
+    figure.unica { width: 100%; }
+    /* contain y no cover: una foto de evidencia no se recorta */
+    figure img {
+        display: block; width: 100%; height: 62mm; object-fit: contain; background: #f4f6f9;
+        border-radius: 1.5mm; border: .6pt solid var(--linea);
+    }
+    figure.unica { width: 70%; }
+    figure.unica img { height: 88mm; }
+    figcaption { margin-top: 1.2mm; font-size: 7.5pt; color: var(--texto-2); }
+    figcaption b { color: var(--texto); }
+
+    /* Firmas */
+    .firmas { margin-top: 10mm; page-break-inside: avoid; font-size: 0; }
+    .firma { display: inline-block; vertical-align: top; width: 46%; border-top: .8pt solid var(--texto); padding-top: 1.5mm; font-size: 9pt; }
+    .firma + .firma { margin-left: 8%; }
+    .firma .val { font-size: 8.5pt; }
+    .firma .etq { margin-bottom: .5mm; }
+</style>
 </head>
 <body>
 
-    <div class="header">
-        <h1>⚡ SIGVER | ANDE</h1>
-        <p>Informe de Levantamiento y Verificación en Campo</p>
+{# ---------------------------------------------------------------- #}
+<header class="encabezado">
+    {% if logo %}<img class="logo" src="file://{{ logo }}" alt="">{% endif %}
+    <div class="titulo">
+        <div class="institucion">ANDE · Departamento de Operación · SIGVER</div>
+        <h1>Acta de verificación de campo</h1>
+        <div class="subtitulo">{{ nombre_tipo }}
+            · <span class="marca-equipo">{% if tipo == 'ETC' %}ETC {{ verificacion.equipo_etc.nro_equipo }}{% else %}{{ verificacion.sitio.id_sitio }}{% endif %}</span></div>
     </div>
-
-    <div class="info-box">
-        <table>
-            <tr>
-                <td><strong>ID Verificación:</strong> {{ verificacion.id_verificacion }}</td>
-                <td><strong>Fecha:</strong> {{ verificacion.fecha_verificacion|date:"d/m/Y H:i" }}</td>
-            </tr>
-            <tr>
-                <td><strong>Responsable:</strong> {{ verificacion.responsable.nombre_completo }}</td>
-                <td><strong>Legajo:</strong> {{ verificacion.responsable.id_personal }}</td>
-            </tr>
-        </table>
+    <div class="numero">
+        <div class="etq">N.º de acta</div>
+        <div class="val marca-acta">{{ verificacion.id_verificacion }}</div>
+        <div class="etq">Fecha de verificación</div>
+        <div class="val">{{ verificacion.fecha_verificacion|date:"d/m/Y · H:i" }} h</div>
     </div>
+</header>
 
+<section class="veredicto">
+    <div class="resultado {{ veredicto.tono }}">
+        <span class="etq">Resultado</span>
+        <div class="val">{{ veredicto.texto }}</div>
+        <div class="det">{{ veredicto.detalle }}</div>
+    </div>
+    <div class="hechos">
+        <div class="hecho">
+            <span class="etq">Técnico responsable</span>
+            <span class="val">{{ verificacion.responsable.nombre_completo }}</span>
+        </div>
+        <div class="hecho">
+            <span class="etq">Legajo</span>
+            <span class="val">{{ verificacion.responsable.id_personal }}</span>
+        </div>
+        <div class="hecho">
+            <span class="etq">Agencia</span>
+            <span class="val{% if not verificacion.agencia_responsable %} vacio{% endif %}">{{ verificacion.agencia_responsable|default:"Sin agencia" }}</span>
+        </div>
+        <div class="hecho">
+            <span class="etq">Ubicación al verificar</span>
+            <span class="val"><span class="insignia {{ ubicacion.tono }}">{{ ubicacion.texto }}</span></span>
+        </div>
+    </div>
+</section>
+
+{# ---------------------------------------------------------------- #}
+<section class="seccion mantener">
+    <h2>Equipo verificado</h2>
+    <div class="datos">
+        {% if tipo == 'ETC' %}
+            {% with e=verificacion.equipo_etc %}
+            <div class="dato"><span class="etq">N.º de equipo</span><span class="val">{{ e.nro_equipo }}</span></div>
+            <div class="dato"><span class="etq">Alimentador</span><span class="val">{{ e.alimentador.codigo|default:"—" }}</span></div>
+            <div class="dato"><span class="etq">Subestación</span><span class="val">{{ e.alimentador.subestacion.codigo|default:"—" }}</span></div>
+            <div class="dato"><span class="etq">Seccionador</span><span class="val">{{ e.get_estado_seccionador_display }}</span></div>
+            <div class="dato"><span class="etq">Cuchillas laterales</span><span class="val">{{ e.get_cuchillas_laterales_display|default:"—" }}</span></div>
+            <div class="dato"><span class="etq">Coordenadas del equipo</span>
+                <span class="val">{% if e.ubicacion %}{{ e.ubicacion.y|floatformat:6 }}, {{ e.ubicacion.x|floatformat:6 }}{% else %}—{% endif %}</span></div>
+            {% endwith %}
+        {% else %}
+            {% with s=verificacion.sitio %}
+            <div class="dato"><span class="etq">Sitio</span><span class="val">{{ s.id_sitio }}{% if s.cod_sitio %} · {{ s.cod_sitio }}{% endif %}</span></div>
+            <div class="dato"><span class="etq">Componente</span><span class="val">{{ verificacion.componente.id_componente }}</span></div>
+            <div class="dato"><span class="etq">Alimentador</span><span class="val">{{ s.alimentador.codigo }}{% if s.alimentador.subestacion %} · {{ s.alimentador.subestacion.codigo }}{% endif %}</span></div>
+            <div class="dato"><span class="etq">Banco (inventario)</span><span class="val">{{ s.get_configuracion_banco_display|default:"—" }}</span></div>
+            <div class="dato"><span class="etq">Capacidad</span><span class="val">{% if s.capacidad_a %}{{ s.capacidad_a }} A{% else %}—{% endif %}</span></div>
+            <div class="dato"><span class="etq">Coordenadas del sitio</span>
+                <span class="val">{% if s.ubicacion_base %}{{ s.ubicacion_base.y|floatformat:6 }}, {{ s.ubicacion_base.x|floatformat:6 }}{% else %}—{% endif %}</span></div>
+            {% endwith %}
+        {% endif %}
+    </div>
+</section>
+
+{# ---------------------------------------------------------------- #}
+<section class="seccion">
+    <h2>Inspección</h2>
     {% if tipo == 'ETC' %}
-        <div class="section-title">Datos del Equipo Telecomandado (ETC)</div>
-        <table class="data-table">
-            <tr>
-                <th>Nro. Equipo</th>
-                <td>{{ verificacion.equipo_etc.nro_equipo }}</td>
-                <th>Alimentador</th>
-                <td>{{ verificacion.equipo_etc.alimentador.codigo }}</td>
-            </tr>
-            <tr>
-                <th>¿Tiene Inconveniente?</th>
-                <td>{% if verificacion.tiene_inconveniente %}Sí{% else %}No{% endif %}</td>
-                <th>Prioridad Reclamo</th>
-                <td>{{ verificacion.prioridad|default:"N/A" }}</td>
-            </tr>
-        </table>
-
-        {% if verificacion.tiene_inconveniente %}
-        <div class="section-title">Fallas Detectadas</div>
-        <ul>
-            {% for falla in verificacion.fallas.all %}
-                <li>{{ falla.codigo }} - {{ falla.descripcion }} ({{ falla.gravedad }})</li>
+        <div class="datos">
+            <div class="dato"><span class="etq">Estado</span>
+                <span class="val">{% if verificacion.tiene_inconveniente %}Presenta falla{% else %}Operativo, sin novedad{% endif %}</span></div>
+            <div class="dato"><span class="etq">Reclamo</span>
+                <span class="val">{% if verificacion.requiere_reclamo %}Sí · prioridad {{ verificacion.get_prioridad_display|lower }}{% else %}No{% endif %}</span></div>
+        </div>
+        {% if fallas %}
+        <h3>Fallas detectadas</h3>
+        <table>
+            <thead><tr><th style="width: 14mm;">Código</th><th>Descripción</th><th style="width: 22mm;">Gravedad</th></tr></thead>
+            <tbody>
+            {% for f in fallas %}
+                <tr>
+                    <td><b>F{{ f.numero|stringformat:"02d" }}</b></td>
+                    <td>{{ f.descripcion }}</td>
+                    <td><span class="insignia {% if f.gravedad == 'CRITICA' %}peligro{% elif f.gravedad == 'ALTA' %}aviso{% else %}neutro{% endif %}">{{ f.get_gravedad_display }}</span></td>
+                </tr>
             {% endfor %}
-        </ul>
+            </tbody>
+        </table>
         {% endif %}
-
     {% else %}
-        <div class="section-title">Datos del Regulador de Tensión</div>
-        <table class="data-table">
-            <tr>
-                <th>Sitio</th>
-                <td>{{ verificacion.sitio.id_sitio }}</td>
-                <th>Componente</th>
-                <td>{{ verificacion.componente.id_componente }}</td>
-            </tr>
-            <tr>
-                <th>Configuración Banco</th>
-                <td>{{ verificacion.tipo_banco_verificado }}</td>
-                <th>Estado del Sitio</th>
-                <td>{{ verificacion.estado_sitio }}</td>
-            </tr>
-        </table>
-
-        {% if verificacion.ensayos_pat.all %}
-        <div class="section-title">Ensayos PAT</div>
-        <table class="data-table">
-            <tr><th>Método</th><th>Resultado</th><th>Condición Suelo</th></tr>
-            {% for ensayo in verificacion.ensayos_pat.all %}
-            <tr>
-                <td>{{ ensayo.metodo_pat }}</td>
-                <td>{{ ensayo.resultado }}</td>
-                <td>{{ ensayo.condicion_suelo }}</td>
-            </tr>
-            {% endfor %}
-        </table>
-        {% endif %}
+        <div class="datos">
+            <div class="dato"><span class="etq">Estado del sitio</span><span class="val">{{ verificacion.get_estado_sitio_display|default:"—" }}</span></div>
+            <div class="dato"><span class="etq">Tipo de control</span><span class="val">{{ verificacion.get_tipo_control_verificado_display|default:"—" }}</span></div>
+            <div class="dato"><span class="etq">Tipo de banco</span><span class="val">{{ verificacion.get_tipo_banco_verificado_display|default:"—" }}</span></div>
+            <div class="dato"><span class="etq">Valla perimetral</span><span class="val">{{ verificacion.valla_perimetral|yesno:"Sí,No,Sin dato" }}</span></div>
+            <div class="dato"><span class="etq">Híbrido</span><span class="val">{{ verificacion.es_hibrido|yesno:"Sí,No,Sin dato" }}</span></div>
+            <div class="dato"><span class="etq">Reclamo</span>
+                <span class="val">{% if verificacion.requiere_reclamo %}Sí · prioridad {{ verificacion.get_prioridad_display|lower }}{% else %}No{% endif %}</span></div>
+            {% if verificacion.configuracion_observada %}
+            <div class="dato completo"><span class="etq">Configuración observada</span><span class="val">{{ verificacion.configuracion_observada }}</span></div>
+            {% endif %}
+            {% if verificacion.observaciones_control_unico %}
+            <div class="dato completo"><span class="etq">Observaciones del control único</span><p class="val texto-libre">{{ verificacion.observaciones_control_unico }}</p></div>
+            {% endif %}
+        </div>
     {% endif %}
 
-    <div class="section-title">Observaciones Generales</div>
-    <p>{{ verificacion.observaciones|default:"Sin observaciones registradas." }}</p>
+    <h3>Observaciones</h3>
+    {% if verificacion.observaciones %}
+        <p class="texto-libre">{{ verificacion.observaciones }}</p>
+    {% else %}
+        <p class="nota">Sin observaciones registradas.</p>
+    {% endif %}
+</section>
 
-                   <!-- FOTOS -->
-    <div class="section-title">Registro Fotográfico</div>
-    <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+{# ---------------------------------------------------------------- #}
+{% if mediciones or ensayos %}
+<section class="seccion">
+    <h2>Mediciones</h2>
+
+    {% if mediciones %}
+    <h3>Termografía</h3>
+    <table>
+        <thead><tr>
+            <th>Punto</th><th>Elemento</th><th class="num">Corriente</th>
+            <th class="num">T. punto</th><th class="num">T. ambiente</th><th class="num">ΔT</th><th>Nivel</th>
+        </tr></thead>
+        <tbody>
+        {% for m in mediciones %}
         <tr>
-            {% if tipo == 'ETC' %}
-                <td style="text-align: center; padding: 5px;">
-                    {% if foto_b64 %}
-                        <!-- Foto de ETC: Le damos un tamaño máximo controlado -->
-                        <img src="{{ foto_b64 }}" style="max-width: 400px; max-height: 250px; border-radius: 8px; border: 1px solid #ccc;">
-                    {% else %}
-                        <p style="color: #999;">No hay foto</p>
-                    {% endif %}
-                </td>
-            {% elif tipo == 'REGULADOR' %}
-                <!-- Foto 1: Frontal -->
-                <td style="width: 33%; text-align: center; vertical-align: top; padding: 5px;">
-                    {% if foto_frontal_b64 %}
-                        <img src="{{ foto_frontal_b64 }}" style="width: 100%; max-width: 150px; max-height: 120px; border-radius: 8px; border: 1px solid #ccc;">
-                        <br><span style="font-size: 11px; font-weight: bold; color: #555;">Frontal</span>
-                    {% endif %}
-                </td>
-                
-                <!-- Foto 2: Entorno -->
-                <td style="width: 33%; text-align: center; vertical-align: top; padding: 5px;">
-                    {% if foto_entorno_b64 %}
-                        <img src="{{ foto_entorno_b64 }}" style="width: 100%; max-width: 150px; max-height: 120px; border-radius: 8px; border: 1px solid #ccc;">
-                        <br><span style="font-size: 11px; font-weight: bold; color: #555;">Entorno</span>
-                    {% endif %}
-                </td>
-                
-                <!-- Foto 3: Control Único -->
-                <td style="width: 33%; text-align: center; vertical-align: top; padding: 5px;">
-                    {% if foto_control_b64 %}
-                        <img src="{{ foto_control_b64 }}" style="width: 100%; max-width: 150px; max-height: 120px; border-radius: 8px; border: 1px solid #ccc;">
-                        <br><span style="font-size: 11px; font-weight: bold; color: #555;">Control Único</span>
-                    {% endif %}
-                </td>
-            {% endif %}
+            <td><b>{{ m.punto.id_punto|default:"—" }}</b>{% if m.punto %} · fase {{ m.punto.fase }}{% endif %}</td>
+            <td>{% if m.punto %}{{ m.punto.get_tipo_elemento_display }}{% if m.punto.lado_conexion != 'N/A' %} ({{ m.punto.get_lado_conexion_display|lower }}){% endif %}{% else %}—{% endif %}</td>
+            <td class="num">{% if m.corriente_a is not None %}{{ m.corriente_a|floatformat:1 }} A{% else %}—{% endif %}</td>
+            <td class="num">{% if m.temperatura_punto_c is not None %}{{ m.temperatura_punto_c|floatformat:1 }} °C{% else %}—{% endif %}</td>
+            <td class="num">{% if m.temperatura_ambiente_c is not None %}{{ m.temperatura_ambiente_c|floatformat:1 }} °C{% else %}—{% endif %}</td>
+            <td class="num"><b>{% if m.delta_temperatura_c is not None %}{{ m.delta_temperatura_c|floatformat:1 }} °C{% else %}—{% endif %}</b></td>
+            <td>{% if m.nivel_termografico %}<span class="insignia {% if m.nivel_termografico == 'Nivel 3' %}peligro{% elif m.nivel_termografico == 'Nivel 2' %}aviso{% else %}ok{% endif %}">{{ m.nivel_termografico }}</span>{% else %}—{% endif %}</td>
         </tr>
+        {% endfor %}
+        </tbody>
     </table>
-        <!-- FOOTER CON FECHA DE EMISIÓN -->
-    <div style="margin-top: 50px; text-align: center; font-size: 10px; color: #999; border-top: 1px solid #eee; padding-top: 10px;">
-        Generado automáticamente por SIGVER PWA<br>
-        Fecha y hora de emisión: {{ fecha_actual|date:"d/m/Y H:i" }} hs.
+    {% endif %}
+
+    {% for e in ensayos %}
+    <div class="mantener">
+        <h3>Puesta a tierra · ensayo {{ forloop.counter }}</h3>
+        <div class="datos">
+            <div class="dato"><span class="etq">Resultado</span>
+                <span class="val">{% if e.resultado %}<span class="insignia {% if e.resultado == 'CONFORME' %}ok{% elif e.resultado == 'NO_CONFORME' %}peligro{% else %}neutro{% endif %}">{{ e.get_resultado_display }}</span>{% else %}—{% endif %}</span></div>
+            <div class="dato"><span class="etq">Método</span><span class="val">{{ e.metodo_pat|default:"—" }}</span></div>
+            <div class="dato"><span class="etq">Equipo de medición</span><span class="val">{{ e.equipo_medicion|default:"—" }}</span></div>
+            <div class="dato"><span class="etq">Condición del suelo</span><span class="val">{{ e.condicion_suelo|default:"—" }}</span></div>
+            <div class="dato"><span class="etq">Temperatura</span><span class="val">{% if e.temperatura_ambiente_c is not None %}{{ e.temperatura_ambiente_c|floatformat:1 }} °C{% else %}—{% endif %}</span></div>
+        </div>
+        {% with lecturas=e.lecturas.all %}
+        {% if lecturas %}
+        <table>
+            <thead><tr><th style="width: 50%;">Lectura</th><th class="num" style="width: 25%;">Distancia</th><th class="num" style="width: 25%;">Resistencia</th></tr></thead>
+            <tbody>
+            {% for l in lecturas %}
+                <tr><td>{{ l.get_tipo_lectura_display }}</td><td class="num">{{ l.distancia_m }} m</td><td class="num"><b>{{ l.valor_ohm|floatformat:2 }} Ω</b></td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        {% endwith %}
+        {% if e.observaciones %}<p class="nota">{{ e.observaciones }}</p>{% endif %}
     </div>
+    {% endfor %}
+</section>
+{% endif %}
+
+{# ---------------------------------------------------------------- #}
+<section class="seccion">
+    <h2>Registro fotográfico</h2>
+    {% if fotos %}
+    <div class="lamina">
+        {% for titulo, b64 in fotos %}
+        <figure{% if fotos|length == 1 %} class="unica"{% endif %}>
+            <img src="{{ b64 }}" alt="{{ titulo }}">
+            <figcaption><b>Foto {{ forloop.counter }}.</b> {{ titulo }}</figcaption>
+        </figure>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="nota">La verificación no tiene fotos.</p>
+    {% endif %}
+</section>
+
+{# ---------------------------------------------------------------- #}
+{% if reclamos %}
+<section class="seccion mantener">
+    <h2>Reclamo generado</h2>
+    <table>
+        <thead><tr><th>Reclamo</th><th>Prioridad</th><th>Estado actual</th><th class="num">Plazo</th></tr></thead>
+        <tbody>
+        {% for r in reclamos %}
+        <tr>
+            <td class="mono">{{ r.id_reclamo }}</td>
+            <td>{{ r.get_prioridad_display|default:"—" }}</td>
+            <td>{{ r.get_estado_display }}{% if r.estado == 'CERRADO' and r.fecha_validacion %} · validado el {{ r.fecha_validacion|date:"d/m/Y" }}{% endif %}</td>
+            <td class="num">{{ r.fecha_limite|date:"d/m/Y H:i"|default:"—" }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+
+{# ---------------------------------------------------------------- #}
+<section class="seccion">
+    <h2>Trazabilidad</h2>
+    <div class="datos">
+        <div class="dato"><span class="etq">Ubicación del técnico</span><span class="val">{{ ubicacion.texto }}</span></div>
+        <div class="dato ancho"><span class="etq">{% if verificacion.ubicacion_capturada %}Coordenadas registradas{% else %}Detalle{% endif %}</span><span class="val">{{ ubicacion.detalle }}</span></div>
+        <div class="dato"><span class="etq">Recibida en el servidor</span><span class="val">{{ verificacion.synced_at|date:"d/m/Y H:i" }} h</span></div>
+        <div class="dato ancho"><span class="etq">Identificador de envío</span><span class="val mono">{{ verificacion.client_uuid }}</span></div>
+    </div>
+    <p class="nota">Acta generada por SIGVER a partir del registro enviado desde el celular del técnico.
+        La distancia al equipo la calcula el servidor con las coordenadas GPS registradas.</p>
+
+    <div class="firmas">
+        <div class="firma">
+            <span class="etq">Técnico responsable</span>
+            <span class="val">{{ verificacion.responsable.nombre_completo }} · {{ verificacion.responsable.id_personal }}</span>
+        </div>
+        <div class="firma">
+            <span class="etq">Supervisor</span>
+            <span class="val vacio">Nombre y firma</span>
+        </div>
+    </div>
+</section>
 
 </body>
 </html>

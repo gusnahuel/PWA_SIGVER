@@ -16,8 +16,8 @@
     <link rel="preload" href="/static/vendor/inter-5.2.5/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 
     <!-- Nuestro CSS: variables compartidas con el admin + estilos de la app -->
-    <link rel="stylesheet" href="/static/css/tokens.css?v=119">
-    <link rel="stylesheet" href="/static/css/style.css?v=119">
+    <link rel="stylesheet" href="/static/css/tokens.css?v=121">
+    <link rel="stylesheet" href="/static/css/style.css?v=121">
 
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#002f6c">
@@ -233,6 +233,24 @@
         <form id="form-verificacion">
             <input type="hidden" id="verif-equipo-id">
 
+            <section class="tarjeta gps-card" id="verif-gps-card">
+                <span class="gps-icon"><i class="fa-solid fa-location-crosshairs" aria-hidden="true"></i></span>
+                <div>
+                    <div class="gps-titulo" id="verif-gps-titulo">Buscando tu ubicación...</div>
+                    <div class="gps-sub" id="verif-gps-sub">Activá el GPS: la ubicación se guarda con la verificación</div>
+                </div>
+            </section>
+
+            <div class="form-group">
+                <span class="field-label">¿La ubicación coincide?</span>
+                <div class="segmented" data-for="verif-ubicacion-coincide"></div>
+                <select id="verif-ubicacion-coincide" hidden>
+                    <option value="SI">Sí</option>
+                    <option value="APROXIMADA">Aproximada</option>
+                    <option value="NO">No</option>
+                </select>
+            </div>
+
             <div class="form-group">
                 <span class="field-label">¿Tiene algún inconveniente?</span>
                 <div class="segmented" data-for="verif-tiene-inconveniente"></div>
@@ -281,13 +299,6 @@
                 </div>
             </section>
 
-            <section class="tarjeta gps-card" id="verif-gps-card">
-                <span class="gps-icon"><i class="fa-solid fa-location-crosshairs" aria-hidden="true"></i></span>
-                <div>
-                    <div class="gps-titulo" id="verif-gps-titulo">Buscando tu ubicación...</div>
-                    <div class="gps-sub" id="verif-gps-sub">Activá el GPS: la ubicación se guarda con la verificación</div>
-                </div>
-            </section>
                         <button type="submit" class="btn-submit" id="btn-guardar-verif">Guardar verificación</button>
             <div id="verif-status" class="form-status"></div>
         </form>
@@ -675,6 +686,6 @@
     <script src="/static/vendor/leaflet-1.9.4/leaflet.js"></script>
     <script src="/static/vendor/markercluster-1.5.3/leaflet.markercluster.js"></script>
     <!-- Nuestro JS -->
-    <script type="module" src="/static/js/app.js?v=119"></script>
+    <script type="module" src="/static/js/app.js?v=121"></script>
 </body>
 </html>

@@ -457,3 +457,17 @@ a.sg-fila:hover { background: var(--sg-azul-suave); color: var(--sg-texto); }
 .sg-tabla th[scope=row], .sg-tabla thead th:first-child { text-align: left; }
 .sg-tabla thead th { font-size: .75rem; text-transform: uppercase; letter-spacing: .03em; color: var(--sg-texto-2); }
 .sg-tabla tbody tr:last-child th, .sg-tabla tbody tr:last-child td { border-bottom: 0; }
+
+/* Reclamo: fechas del recorrido en una tabla compacta */
+.sg-seguimiento { border-collapse: collapse; font-size: .9rem; font-variant-numeric: tabular-nums; }
+.sg-seguimiento th { font-weight: 600; color: var(--sg-texto-2); padding: 3px 18px 3px 0; text-align: left; white-space: nowrap; }
+.sg-seguimiento td { padding: 3px 0; }
+
+/* Lista de reclamos: que entren todas las columnas */
+#result_list .field-agencia_responsable select,
+#result_list .field-responsable_asignado select { width: 132px; }
+#result_list th.field-id_reclamo, #result_list td.field-id_reclamo { font-size: .8rem; max-width: 150px; word-break: break-word; }
+#result_list td, #result_list th { padding-left: .5rem; padding-right: .5rem; }
+/* Terminado o esperando validación: no se reasigna (se ve, pero apagado) */
+#result_list select:disabled { opacity: .5; cursor: not-allowed; background-image: none; }
+#result_list thead th { white-space: normal; vertical-align: bottom; }

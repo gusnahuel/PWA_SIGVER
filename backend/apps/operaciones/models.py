@@ -409,7 +409,7 @@ class Reclamo(models.Model):
     están en apps/operaciones/reclamos.py: no modificar el estado a mano.
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    id_reclamo = models.CharField(max_length=50, unique=True)
+    id_reclamo = models.CharField('N.º de reclamo', max_length=50, unique=True)
 
     # Origen: un reclamo de regulador apunta a su verificación y componente;
     # uno de ETC, a su verificación de ETC y al equipo.
@@ -441,16 +441,16 @@ class Reclamo(models.Model):
         verbose_name='equipo ETC',
     )
 
-    fecha_reclamo = models.DateTimeField(auto_now_add=True)
+    fecha_reclamo = models.DateTimeField('recibido', auto_now_add=True)
 
     ORIGEN = [
         ('VERIFICACION', 'Verificación'),
         ('MANUAL', 'Manual'),
         ('EXTERNO', 'Externo'),
     ]
-    origen_reclamo = models.CharField(max_length=20, choices=ORIGEN, default='VERIFICACION')
-    descripcion = models.TextField()
-    tipo_reclamo = models.CharField(max_length=100, blank=True)
+    origen_reclamo = models.CharField('origen', max_length=20, choices=ORIGEN, default='VERIFICACION')
+    descripcion = models.TextField('descripción')
+    tipo_reclamo = models.CharField('tipo de reclamo', max_length=100, blank=True)
     prioridad = models.CharField(
         max_length=10,
         choices=[
@@ -480,38 +480,41 @@ class Reclamo(models.Model):
         null=True, blank=True,
         on_delete=models.SET_NULL,
         related_name='reclamos_responsable',
+        verbose_name='agencia',
     )
     responsable_asignado = models.ForeignKey(
         'inventario.Personal',
         null=True, blank=True,
         on_delete=models.SET_NULL,
         related_name='reclamos_asignados',
+        verbose_name='técnico asignado',
     )
 
-    requiere_intervencion = models.BooleanField(default=True)
+    requiere_intervencion = models.BooleanField('requiere intervención', default=True)
     fecha_limite = models.DateTimeField(
         null=True, blank=True, db_index=True,
-        help_text='Plazo para resolverlo, según la prioridad (ver PLAZOS en reclamos.py)',
+        verbose_name='plazo', help_text='Fecha límite según la prioridad: crítica 24 h, alta 72 h, media 7 días, baja 30 días.',
     )
-    fecha_asignacion = models.DateTimeField(null=True, blank=True)
+    fecha_asignacion = models.DateTimeField('asignado', null=True, blank=True)
     fecha_inicio = models.DateTimeField(
-        null=True, blank=True, help_text='Cuándo el técnico empezó el trabajo (con la foto del estado inicial)',
+        'iniciado', null=True, blank=True, help_text='Cuándo el técnico empezó el trabajo (con la foto del estado inicial)',
     )
-    fecha_ejecucion = models.DateTimeField(null=True, blank=True)
-    fecha_cierre = models.DateTimeField(null=True, blank=True)
+    fecha_ejecucion = models.DateTimeField('enviado a validación', null=True, blank=True)
+    fecha_cierre = models.DateTimeField('cerrado', null=True, blank=True)
     validado_por = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True, blank=True,
         on_delete=models.SET_NULL,
         related_name='reclamos_validados',
+        verbose_name='validado por',
         help_text='Supervisor que aprobó el trabajo del técnico',
     )
-    fecha_validacion = models.DateTimeField(null=True, blank=True)
+    fecha_validacion = models.DateTimeField('validado', null=True, blank=True)
     resultado = models.TextField(blank=True)
-    motivo_rechazo = models.TextField(blank=True)
-    foto_evidencia_antes = models.ImageField(upload_to='reclamos/antes/%Y/%m/', null=True, blank=True)
-    foto_evidencia_despues = models.ImageField(upload_to='reclamos/despues/%Y/%m/', null=True, blank=True)
-    observaciones_cierre = models.TextField(blank=True)
+    motivo_rechazo = models.TextField('motivo del rechazo', blank=True)
+    foto_evidencia_antes = models.ImageField('foto antes', upload_to='reclamos/antes/%Y/%m/', null=True, blank=True)
+    foto_evidencia_despues = models.ImageField('foto del trabajo terminado', upload_to='reclamos/despues/%Y/%m/', null=True, blank=True)
+    observaciones_cierre = models.TextField('observaciones del técnico', blank=True)
 
     # Dónde estaba el técnico al enviar la evidencia (prueba de que trabajó en el lugar)
     ubicacion_evidencia = gis_models.PointField(geography=True, null=True, blank=True)

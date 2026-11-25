@@ -1,0 +1,22 @@
+# ==========================================
+# SIGVER - Modo "pruebas por internet" (ngrok)
+# ==========================================
+# Se suma a docker-compose.yml; lo usa scripts/ngrok.sh (no levantarlo a mano).
+# - Configuración de producción: sin DEBUG (un error no muestra código ni datos)
+#   y solo se acepta la dirección de ngrok (y localhost).
+# - Cierra los puertos 8000 (Django directo) y 5432 (base de datos) hacia la red:
+#   todo entra por nginx.
+services:
+  db:
+    ports: !reset []
+
+  web:
+    ports: !reset []
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.prod
+      DJANGO_DEBUG: "False"
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,${NGROK_DOMAIN:?falta NGROK_DOMAIN}
+      DJANGO_CSRF_TRUSTED_ORIGINS: https://${NGROK_DOMAIN},https://localhost
+      # Sin HSTS: si no, el navegador de esta PC quedaría un año obligado a
+      # usar HTTPS en localhost (ngrok ya fuerza HTTPS en su dirección)
+      DJANGO_HSTS_SECONDS: "0"

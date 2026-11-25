@@ -37,6 +37,9 @@ NOMBRE_ESTADO = dict(Reclamo.ESTADO)
 
 SUPERVISION = frozenset({'supervisor', 'admin_eam'})
 TODOS = frozenset({'tecnico', 'supervisor', 'admin_eam'})
+# No es un rol: la persona cuya ficha de Personal tiene asignado el reclamo
+EJECUTOR = frozenset({'asignado'})
+MENSAJE_OTRA_PERSONA = 'Este reclamo está asignado a otra persona: lo inicia y lo termina quien lo tiene asignado.'
 
 # (desde, hacia) -> roles que pueden hacerlo.
 # El técnico ejecuta y envía a validación; el supervisor asigna, valida,
@@ -44,11 +47,12 @@ TODOS = frozenset({'tecnico', 'supervisor', 'admin_eam'})
 TRANSICIONES = {
     ('ABIERTO', 'ASIGNADO'): SUPERVISION,
     ('ASIGNADO', 'ABIERTO'): SUPERVISION,
-    # Iniciar y terminar el trabajo es del técnico asignado: así hay foto del
-    # antes y del después (finalizar exige haber iniciado)
-    ('ABIERTO', 'EN_PROCESO'): frozenset({'tecnico'}),
-    ('ASIGNADO', 'EN_PROCESO'): frozenset({'tecnico'}),
-    ('EN_PROCESO', 'PENDIENTE_VALIDACION'): frozenset({'tecnico'}),
+    # Iniciar y terminar el trabajo lo hace la persona asignada, sea cual sea su
+    # rol (un supervisor también puede salir al campo). Así hay foto del antes
+    # y del después; finalizar exige haber iniciado.
+    ('ABIERTO', 'EN_PROCESO'): EJECUTOR,
+    ('ASIGNADO', 'EN_PROCESO'): EJECUTOR,
+    ('EN_PROCESO', 'PENDIENTE_VALIDACION'): EJECUTOR,
     ('PENDIENTE_VALIDACION', 'CERRADO'): SUPERVISION,
     ('PENDIENTE_VALIDACION', 'EN_PROCESO'): SUPERVISION,   # devolver al técnico
     **{(desde, 'RECHAZADO'): SUPERVISION for desde in (*ESTADOS_ACTIVOS, 'PENDIENTE_VALIDACION')},
@@ -71,18 +75,16 @@ CAMPOS_TECNICO = frozenset({
     'estado', 'resultado', 'observaciones_cierre', 'foto_evidencia_antes', 'foto_evidencia_despues',
     'ubicacion_evidencia', 'precision_evidencia_m',
 })
-
-# Distancia entre el técnico y el equipo al enviar la evidencia (ver geo.py)
-DISTANCIA_EN_EL_LUGAR_M = geo.EN_EL_LUGAR_M
-DISTANCIA_CERCA_M = geo.CERCA_M
+# La descripción viene del campo (verificación o carga manual): el supervisor
+# agrega información con un comentario, que queda en el historial
 CAMPOS_SUPERVISOR = frozenset({
     'estado', 'prioridad', 'agencia_responsable', 'responsable_asignado', 'requiere_intervencion',
-    'descripcion', 'tipo_reclamo', 'resultado',
+    'tipo_reclamo', 'resultado',
 })
 # El origen (qué verificación lo generó) y la evidencia del técnico solo los
 # corrige admin EAM; el supervisor no reescribe lo que viene del campo.
 CAMPOS_ADMIN_EAM = CAMPOS_SUPERVISOR | {
-    'id_reclamo', 'verificacion', 'componente', 'verificacion_etc', 'equipo_etc', 'origen_reclamo',
+    'descripcion', 'id_reclamo', 'verificacion', 'componente', 'verificacion_etc', 'equipo_etc', 'origen_reclamo',
     'foto_evidencia_antes', 'foto_evidencia_despues', 'observaciones_cierre',
 }
 # Plazo para resolver según la prioridad, contado desde que se crea el reclamo.
@@ -98,12 +100,6 @@ ORDEN_PRIORIDAD = {'BAJA': 1, 'MEDIA': 2, 'ALTA': 3, 'CRITICA': 4}
 
 def calcular_fecha_limite(desde, prioridad):
     return desde + PLAZOS.get(prioridad or 'MEDIA', PLAZOS['MEDIA'])
-
-
-def esta_vencido(reclamo, ahora=None):
-    """Vencido = sigue sin asignar o en manos del técnico después del plazo."""
-    return (reclamo.estado in ESTADOS_ACTIVOS and reclamo.fecha_limite is not None
-            and reclamo.fecha_limite < (ahora or timezone.now()))
 
 
 # Los completa el sistema según la transición (no se muestran como "dato cambiado")
@@ -197,7 +193,12 @@ def planificar(reclamo, usuario, cambios, comentario=''):
 
     comentario = (comentario or '').strip()
     cambios = {c: v for c, v in cambios.items() if _distinto(getattr(reclamo, c), v)}
-    no_permitidos = set(cambios) - CAMPOS_POR_ROL[rol]
+    asignado = es_la_persona_asignada(reclamo, usuario)
+    # Quien tiene asignado el reclamo carga su evidencia, aunque sea supervisor
+    no_permitidos = set(cambios) - (CAMPOS_POR_ROL[rol] | (CAMPOS_TECNICO if asignado else frozenset()))
+    if no_permitidos and no_permitidos <= CAMPOS_TECNICO:
+        # Evidencia del trabajo cargada por alguien que no lo tiene asignado
+        raise ReglaReclamo(MENSAJE_OTRA_PERSONA, permiso=True)
     if no_permitidos:
         nombres = ', '.join(sorted(_nombre_campo(c) for c in no_permitidos))
         raise ReglaReclamo(f'No podés modificar: {nombres}.', permiso=True)
@@ -227,7 +228,7 @@ def planificar(reclamo, usuario, cambios, comentario=''):
 
     # --- Cambio de estado pedido explícitamente ---
     if destino is not None and destino != estado:
-        _validar_transicion(reclamo, usuario, rol, plan, estado, destino, comentario, ahora)
+        _validar_transicion(reclamo, usuario, rol, asignado, plan, estado, destino, comentario, ahora)
         estado = destino
 
     if 'prioridad' in plan.valores:
@@ -247,7 +248,7 @@ def planificar(reclamo, usuario, cambios, comentario=''):
             plan.detalle.append('Ubicación registrada (el equipo no tiene coordenadas para comparar).')
         else:
             precision = plan.valores.get('precision_evidencia_m')
-            plan.detalle.append(f'Ubicación: {texto_distancia(plan.valores["distancia_evidencia_m"])} del equipo'
+            plan.detalle.append(f'Ubicación: {geo.texto_distancia(plan.valores["distancia_evidencia_m"])} del equipo'
                                 + (f', GPS ±{precision} m.' if precision is not None else '.'))
     return plan
 
@@ -301,24 +302,26 @@ def distancia_al_equipo(reclamo, punto):
     return None
 
 
-texto_distancia = geo.texto_distancia
+def es_la_persona_asignada(reclamo, usuario):
+    personal = getattr(usuario, 'personal', None)
+    return personal is not None and reclamo.responsable_asignado_id == personal.pk
 
 
-def _validar_transicion(reclamo, usuario, rol, plan, desde, hacia, comentario, ahora):
+def _validar_transicion(reclamo, usuario, rol, asignado, plan, desde, hacia, comentario, ahora):
     clave = (desde, hacia)
     roles = TRANSICIONES.get(clave)
-    if roles is None or rol not in roles:
+    permitido = roles is not None and (rol in roles or ('asignado' in roles and asignado))
+    if not permitido:
+        if roles == EJECUTOR:
+            raise ReglaReclamo(MENSAJE_OTRA_PERSONA, campo='estado', permiso=True)
+        if hacia == 'PENDIENTE_VALIDACION' and desde in ('ABIERTO', 'ASIGNADO') and asignado:
+            raise ReglaReclamo('Primero iniciá el trabajo, con la foto del estado inicial.', campo='estado')
         if rol == 'tecnico':
-            if hacia == 'PENDIENTE_VALIDACION' and desde in ('ABIERTO', 'ASIGNADO'):
-                raise ReglaReclamo('Primero iniciá el trabajo, con la foto del estado inicial.', campo='estado')
             raise ReglaReclamo('Un técnico solo puede iniciar el trabajo o enviarlo a validación.',
                                permiso=True)
         if roles is None:
             raise ReglaReclamo(f'No se puede pasar de «{NOMBRE_ESTADO[desde]}» a «{NOMBRE_ESTADO[hacia]}».',
                                campo='estado')
-        if roles == {'tecnico'}:
-            raise ReglaReclamo('Eso lo hace el técnico asignado desde la app, con la foto del trabajo.',
-                               campo='estado', permiso=True)
         raise ReglaReclamo('Solo admin EAM puede reabrir un reclamo terminado.', campo='estado', permiso=True)
 
     if clave in REQUIEREN_MOTIVO and not comentario:
@@ -329,7 +332,12 @@ def _validar_transicion(reclamo, usuario, rol, plan, desde, hacia, comentario, a
     if hacia in ('ASIGNADO', 'EN_PROCESO', 'PENDIENTE_VALIDACION') and responsable is None:
         raise ReglaReclamo('Primero asigná un técnico.', campo='responsable_asignado')
 
-    if hacia == 'EN_PROCESO' and rol == 'tecnico':
+    if hacia == 'CERRADO' and asignado:
+        # Segregación de funciones: quien hizo el trabajo no lo aprueba
+        raise ReglaReclamo('No podés validar un trabajo que hiciste vos: tiene que validarlo otro supervisor.',
+                           campo='estado', permiso=True)
+
+    if hacia == 'EN_PROCESO' and desde in ('ABIERTO', 'ASIGNADO'):
         # Iniciar: foto del estado en que encontró el equipo
         if not (valores.get('foto_evidencia_antes') or reclamo.foto_evidencia_antes):
             raise ReglaReclamo('Sacá una foto del estado inicial para iniciar el trabajo.',
@@ -401,6 +409,10 @@ def registrar(reclamo, usuario, estado_anterior='', estado_nuevo='', detalle='',
 # CREACIÓN
 # =====================================================
 
+def nuevo_numero_manual():
+    return f"REC-MAN-{timezone.localdate():%Y%m%d}-{uuid.uuid4().hex[:6].upper()}"
+
+
 def preparar_nuevo(usuario, datos):
     """Valida y completa los datos de un reclamo cargado a mano (API o admin)."""
     rol = rol_de(usuario)
@@ -430,7 +442,7 @@ def preparar_nuevo(usuario, datos):
         datos['fecha_asignacion'] = timezone.now()
     datos.setdefault('origen_reclamo', 'MANUAL')
     if not datos.get('id_reclamo'):
-        datos['id_reclamo'] = f"REC-MAN-{timezone.localdate():%Y%m%d}-{uuid.uuid4().hex[:6].upper()}"
+        datos['id_reclamo'] = nuevo_numero_manual()
     return datos
 
 

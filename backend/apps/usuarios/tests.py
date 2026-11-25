@@ -111,10 +111,14 @@ class AdminSupervisorTests(TestCase):
         req = self._request(self.supervisor)
         self.assertTrue(ma.has_change_permission(req, self.reclamo))
         campos = ma.get_readonly_fields(req, self.reclamo)
-        for campo in ('verificacion', 'componente', 'foto_evidencia_despues', 'observaciones_cierre'):
+        for campo in ('id_reclamo', 'descripcion', 'observaciones_cierre', 'vista_origen'):
             self.assertIn(campo, campos)
         self.assertNotIn('agencia_responsable', campos)
         self.assertNotIn('estado', campos)
+        # El origen y la evidencia del técnico ni siquiera son campos del formulario
+        editables = {c for _, opciones in ma.get_fieldsets(req, self.reclamo) for c in opciones['fields']} - set(campos)
+        for campo in ('verificacion', 'componente', 'foto_evidencia_antes', 'foto_evidencia_despues'):
+            self.assertNotIn(campo, editables)
 
     def test_supervisor_no_ve_usuarios(self):
         self.client.force_login(self.supervisor)

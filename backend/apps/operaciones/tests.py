@@ -557,6 +557,34 @@ class ReclamoReglasTests(BaseSigverTest):
         self.patch(self.supervisor, {'estado': 'EN_PROCESO', 'comentario': 'Repetir'})
         self.assertEqual(self.recargar().fecha_inicio, inicio)
 
+    # --- Supervisor que trabaja en el campo ---
+    def test_supervisor_asignado_ejecuta_pero_no_se_valida_a_si_mismo(self):
+        ficha = Personal.objects.create(id_personal='PER-S1', nombre_completo='Supervisor Uno',
+                                        agencia=self.agencia, usuario=self.supervisor)
+        self.patch(self.supervisor, {'responsable_asignado': str(ficha.id)})
+        # Inicia y finaliza como cualquier asignado (con las mismas fotos)
+        res = self.patch(self.supervisor, {'estado': 'EN_PROCESO',
+                                           'foto_evidencia_antes': imagen_de_prueba('antes.jpg')}, 'multipart')
+        self.assertEqual(res.status_code, 200, res.data)
+        res = self.patch(self.supervisor, {'estado': 'PENDIENTE_VALIDACION',
+                                           'foto_evidencia_despues': imagen_de_prueba()}, 'multipart')
+        self.assertEqual(res.status_code, 200, res.data)
+        # Pero no aprueba su propio trabajo
+        res = self.patch(self.supervisor, {'estado': 'CERRADO'})
+        self.assertEqual(res.status_code, 403)
+        self.assertIn('otro supervisor', str(res.data))
+        otro = Usuario.objects.create_user('super2', password='x', rol='supervisor_zona')
+        otro.agencias_asignadas.add(self.agencia)
+        self.assertEqual(self.patch(otro, {'estado': 'CERRADO'}).status_code, 200)
+        self.assertEqual(self.recargar().validado_por, otro)
+
+    def test_quien_no_esta_asignado_recibe_un_mensaje_claro(self):
+        self.patch(self.supervisor, {'responsable_asignado': str(self.personal_tecnico.id)})
+        res = self.patch(self.supervisor, {'estado': 'EN_PROCESO',
+                                           'foto_evidencia_antes': imagen_de_prueba('antes.jpg')}, 'multipart')
+        self.assertEqual(res.status_code, 403)
+        self.assertIn('asignado a otra persona', str(res.data))
+
     # --- GPS de la evidencia (Fase 3) ---
     def finalizar(self, **gps):
         self.patch(self.supervisor, {'responsable_asignado': str(self.personal_tecnico.id)})
@@ -595,6 +623,49 @@ class ReclamoReglasTests(BaseSigverTest):
         res = self.patch(self.tecnico, {'estado': 'PENDIENTE_VALIDACION', 'gps_latitud': -27.1,
                                         'foto_evidencia_despues': imagen_de_prueba()}, 'multipart')
         self.assertEqual(res.status_code, 400)
+
+    # --- Admin: formulario ---
+    def admin_eam_request(self):
+        request = RequestFactory().post('/admin/')
+        request.user = Usuario.objects.create_superuser('eam_form', password='x')
+        return request
+
+    def test_alta_manual_genera_numero_y_origen(self):
+        ma = admin_site._registry[Reclamo]
+        request = self.admin_eam_request()
+        Formulario = ma.get_form(request, None)
+        form = Formulario(data={'descripcion': 'Poste inclinado', 'prioridad': 'ALTA',
+                                'equipo_etc': self.equipo.id, 'agencia_responsable': self.agencia.id})
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertNotIn('estado', form.fields)            # lo fija el sistema
+        obj = form.save(commit=False)
+        request._messages = type('M', (), {'add': lambda *a, **k: None})()
+        ma.save_model(request, obj, form, change=False)
+        nuevo = Reclamo.objects.get(descripcion='Poste inclinado')
+        self.assertTrue(nuevo.id_reclamo.startswith('REC-MAN-'))
+        self.assertEqual((nuevo.origen_reclamo, nuevo.estado), ('MANUAL', 'ABIERTO'))
+        self.assertIsNotNone(nuevo.fecha_limite)
+        self.assertEqual(nuevo.historial.get().estado_nuevo, 'ABIERTO')
+
+    def test_alta_manual_exige_un_solo_equipo(self):
+        ma = admin_site._registry[Reclamo]
+        Formulario = ma.get_form(self.admin_eam_request(), None)
+        sin_equipo = Formulario(data={'descripcion': 'x', 'prioridad': 'ALTA'})
+        self.assertFalse(sin_equipo.is_valid())
+        dos = Formulario(data={'descripcion': 'x', 'prioridad': 'ALTA', 'equipo_etc': self.equipo.id,
+                               'componente': self.componente.id})
+        self.assertFalse(dos.is_valid())
+        self.assertIn('equipo_etc', dos.errors)
+
+    def test_numero_de_reclamo_y_reasignacion_en_lista(self):
+        ma = admin_site._registry[Reclamo]
+        request = self.admin_eam_request()
+        self.assertIn('id_reclamo', ma.get_readonly_fields(request, self.reclamo))   # ni siquiera admin EAM
+        self.patch(self.supervisor, {'estado': 'RECHAZADO', 'comentario': 'Duplicado'})
+        self.recargar()
+        fila = ma.get_changelist_form(request)(instance=self.reclamo)
+        self.assertTrue(fila.fields['responsable_asignado'].disabled)
+        self.assertTrue(fila.fields['agencia_responsable'].disabled)
 
     # --- Admin ---
     def test_admin_usa_las_mismas_reglas(self):
@@ -725,8 +796,6 @@ class ReclamosDesdeVerificacionTests(BaseSigverTest):
         self.assertFalse(filtrar_bandeja(Reclamo.objects.all(), 'vencidos').exists())
         Reclamo.objects.filter(pk=reclamo.pk).update(fecha_limite=timezone.now() - timezone.timedelta(hours=1))
         self.assertTrue(filtrar_bandeja(Reclamo.objects.all(), 'vencidos').exists())
-        reclamo.refresh_from_db()
-        self.assertTrue(reclamos.esta_vencido(reclamo))
 
     # --- Mapa ---
     def test_etc_sigue_en_rojo_hasta_cerrar_el_reclamo(self):

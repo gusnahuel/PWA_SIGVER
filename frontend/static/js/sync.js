@@ -2,10 +2,10 @@
  * SIGVER - Trabajo sin conexión: cola de verificaciones (IndexedDB), contadores
  * de pendientes, estado de la conexión y sincronización automática.
  */
-import { guardarVerificacionOffline, obtenerPendientes, eliminarDeOutbox } from './db.js?v=119';
-import { fetchConTimeout, describirErrorServidor } from './api.js?v=119';
-import { ponerBadge, registrarAcciones, showToast } from './ui.js?v=119';
-import { estado } from './estado.js?v=119';
+import { guardarVerificacionOffline, obtenerPendientes, eliminarDeOutbox } from './db.js?v=121';
+import { fetchConTimeout, describirErrorServidor } from './api.js?v=121';
+import { ponerBadge, registrarAcciones, showToast } from './ui.js?v=121';
+import { estado } from './estado.js?v=121';
 
 let isSyncing = false;
 let cantidadPendientes = 0;
@@ -94,6 +94,7 @@ function armarFormData(payload) {
     formData.append('observaciones', payload.observaciones || '');
     formData.append('requiere_reclamo', payload.requiere_reclamo || false);
     formData.append('prioridad', payload.prioridad || '');
+    if (payload.ubicacion_coincide) formData.append('ubicacion_coincide', payload.ubicacion_coincide);
     if (payload.fallas) payload.fallas.forEach((id) => formData.append('fallas', id));
     if (payload.foto) formData.append('foto', payload.foto);
     ['gps_latitud', 'gps_longitud', 'gps_precision_m'].forEach((campo) => {

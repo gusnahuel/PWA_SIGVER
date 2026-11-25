@@ -4,7 +4,8 @@ SIGVER - Admin de Operaciones
 from django import forms
 from django.contrib import admin, messages
 from django.contrib.gis.admin import GISModelAdmin
-from django.db.models import Q
+from django.db.models import Case, IntegerField, Q, Value, When
+from django.utils.formats import date_format
 from django.core.exceptions import PermissionDenied
 from django.template.response import TemplateResponse
 from django.urls import path
@@ -243,16 +244,6 @@ class LecturaPATAdmin(AlcanceVerificacionesMixin, InmutableSalvoAdminEAM, admin.
     search_fields = ('id_lectura', 'ensayo__id_ensayo')
 
 
-def texto_duracion(delta):
-    """'3 d', '5 h' o '20 min': lo justo para leer de un vistazo."""
-    segundos = int(delta.total_seconds())
-    if segundos >= 86400:
-        return f'{segundos // 86400} d'
-    if segundos >= 3600:
-        return f'{segundos // 3600} h'
-    return f'{max(segundos // 60, 1)} min'
-
-
 class BandejaReclamosFilter(admin.SimpleListFilter):
     """Colas de trabajo del supervisor (las mismas que muestra el inicio del admin)."""
     title = 'bandeja de trabajo'
@@ -294,6 +285,22 @@ class ReclamoAdminForm(forms.ModelForm):
     """
     usuario = None   # lo fija ReclamoAdmin con el usuario del pedido
 
+    # Lo que se pide al cargar un reclamo a mano (el resto lo completa el sistema)
+    CAMPOS_ALTA = ('descripcion', 'prioridad', 'equipo_etc', 'componente',
+                   'agencia_responsable', 'responsable_asignado')
+
+    # Qué se puede hacer desde cada estado (ayuda bajo el campo Estado)
+    AYUDA_ESTADO = {
+        'ABIERTO': 'Para asignarlo elegí el técnico: el estado pasa solo a «Asignado». '
+                   'Para descartarlo, «Rechazado» con un comentario.',
+        'ASIGNADO': 'El técnico lo inicia desde la app. Podés reasignarlo o rechazarlo con un comentario.',
+        'EN_PROCESO': 'El técnico está trabajando y lo envía a validación desde la app, con la foto.',
+        'PENDIENTE_VALIDACION': 'Revisá las fotos y la ubicación. Para aprobar elegí «Cerrado»; '
+                                'para pedir una corrección, «En proceso» con un comentario.',
+        'CERRADO': 'Terminado. Solo admin EAM puede reabrirlo, con un comentario.',
+        'RECHAZADO': 'Terminado. Solo admin EAM puede reabrirlo, con un comentario.',
+    }
+
     comentario = forms.CharField(
         label='Comentario o motivo', required=False,
         widget=forms.Textarea(attrs={'rows': 2}),
@@ -306,13 +313,30 @@ class ReclamoAdminForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Los reclamos usan UUID: el id existe antes de guardar, por eso no sirve "instance.pk"
+        self.es_nuevo = self.instance._state.adding
+        if self.es_nuevo:
+            ayudas = {
+                'descripcion': 'Qué se observó y dónde. El número, el plazo y el estado los completa el sistema.',
+                'equipo_etc': 'Elegí un ETC o un componente de regulador (uno solo).',
+                'responsable_asignado': 'Opcional: si lo asignás ahora, el reclamo nace «Asignado».',
+            }
+            for campo, texto in ayudas.items():
+                if campo in self.fields:
+                    self.fields[campo].help_text = texto
+            if 'componente' in self.fields:
+                self.fields['componente'].label = 'Componente de regulador'
+            return
         if 'estado' in self.fields:
             # Solo los estados a los que este usuario puede llevarlo desde el actual
-            if self.instance.pk:
-                posibles = reclamos.estados_posibles(self.instance, self.usuario)
-            else:
-                posibles = ['ABIERTO']
+            posibles = reclamos.estados_posibles(self.instance, self.usuario)
             self.fields['estado'].choices = [(v, t) for v, t in Reclamo.ESTADO if v in posibles]
+            self.fields['estado'].help_text = self.AYUDA_ESTADO.get(self.instance.estado, '')
+        # En la lista: no se reasigna lo terminado ni lo que espera validación
+        if self.instance.estado in (*reclamos.ESTADOS_FINALES, 'PENDIENTE_VALIDACION'):
+            for campo in ('agencia_responsable', 'responsable_asignado'):
+                if campo in self.fields:
+                    self.fields[campo].disabled = True
 
     def cambios(self):
         campos_modelo = {f.name for f in Reclamo._meta.fields}
@@ -321,11 +345,17 @@ class ReclamoAdminForm(forms.ModelForm):
 
     def clean(self):
         datos = super().clean()
-        if self.instance.pk:
-            try:
+        try:
+            if self.es_nuevo:
+                if bool(datos.get('equipo_etc')) == bool(datos.get('componente')):
+                    raise reclamos.ReglaReclamo('Elegí el equipo: un ETC o un componente de regulador (uno solo).',
+                                                campo='equipo_etc')
+                self.datos_nuevos = reclamos.preparar_nuevo(
+                    self.usuario, {c: datos.get(c) for c in self.CAMPOS_ALTA})
+            else:
                 reclamos.planificar(self.instance, self.usuario, self.cambios(), datos.get('comentario', ''))
-            except reclamos.ReglaReclamo as e:
-                self.add_error(e.campo if e.campo in self.fields else None, e.mensaje)
+        except reclamos.ReglaReclamo as e:
+            self.add_error(e.campo if e.campo in self.fields else None, e.mensaje)
         return datos
 
 
@@ -375,52 +405,85 @@ class ReclamoAdmin(admin.ModelAdmin):
     form = ReclamoAdminForm
     inlines = (HistorialReclamoInline,)
     list_display = ('id_reclamo', 'equipo', 'estado_badge', 'prioridad_badge', 'plazo',
-                    'agencia_responsable', 'responsable_asignado', 'tiene_evidencia')
+                    'agencia_responsable', 'responsable_asignado')
     # Asignar agencia y técnico desde la lista, sin abrir cada reclamo
     list_editable = ('agencia_responsable', 'responsable_asignado')
     list_filter = (BandejaReclamosFilter, 'estado', 'prioridad', 'origen_reclamo',
                    'agencia_responsable', 'fecha_reclamo')
-    list_select_related = ('componente', 'equipo_etc', 'agencia_responsable', 'responsable_asignado')
-    search_fields = ('id_reclamo', 'descripcion', 'componente__id_componente', 'equipo_etc__nro_equipo')
-    autocomplete_fields = ('componente', 'verificacion', 'equipo_etc', 'verificacion_etc')
+    list_select_related = ('componente__sitio', 'equipo_etc', 'agencia_responsable', 'responsable_asignado')
+    search_fields = ('id_reclamo', 'descripcion', 'componente__id_componente', 'componente__sitio__id_sitio',
+                     'equipo_etc__nro_equipo')
+    autocomplete_fields = ('componente', 'equipo_etc')
     list_per_page = 25
-    # La evidencia la carga el técnico desde la PWA y las fechas las pone el sistema:
-    # el supervisor las ve, no las edita
-    readonly_fields = ('fecha_reclamo', 'observaciones_cierre', 'foto_evidencia_despues',
-                       'vista_fotos', 'vista_ubicacion', 'fecha_inicio', 'fecha_asignacion', 'fecha_ejecucion', 'fecha_cierre',
-                       'validado_por', 'fecha_validacion', 'motivo_rechazo', 'fecha_limite')
     actions = ('validar_y_cerrar',)
+
+    # Campos ocultos a propósito (siguen en la base): requiere_intervencion, resultado
+    # y tipo_reclamo no los usa ninguna regla; la foto "antes" se ve en la galería; el
+    # origen (verificación, equipo) se muestra resumido y no se edita.
+    SECCION_EVIDENCIA = ('Evidencia del técnico', {
+        'fields': ('vista_fotos', 'vista_ubicacion', 'observaciones_cierre'),
+    })
     fieldsets = (
-        ('Evidencia del técnico (para validar)', {
-            'fields': ('vista_fotos', 'vista_ubicacion', 'observaciones_cierre'),
-            'description': 'Revisá las fotos, la ubicación y la observación. Para aprobar, pasá el estado a '
-                           '«Cerrado»; para pedir una corrección, a «En proceso» con un comentario.',
-        }),
         ('Gestión', {
-            'fields': ('estado', 'comentario', 'prioridad', 'agencia_responsable', 'responsable_asignado',
-                       'requiere_intervencion'),
-            'description': 'Al asignar un técnico el reclamo pasa solo a «Asignado».',
+            'fields': ('estado', 'comentario', 'prioridad', 'agencia_responsable', 'responsable_asignado'),
         }),
         ('Reclamo', {
-            'fields': ('id_reclamo', 'descripcion', 'tipo_reclamo', 'origen_reclamo', 'fecha_reclamo',
-                       'equipo_etc', 'verificacion_etc', 'componente', 'verificacion')
+            'fields': ('id_reclamo', 'vista_origen', 'descripcion', 'fecha_limite'),
         }),
-        ('Fechas y validación', {
-            'fields': ('fecha_limite', 'fecha_asignacion', 'fecha_inicio', 'fecha_ejecucion', 'fecha_validacion',
-                       'validado_por', 'fecha_cierre'),
-            'description': 'El plazo depende de la prioridad: crítica 24 h, alta 72 h, media 7 días, baja 30 días.',
-        }),
-        ('Resolución', {
-            'fields': ('resultado', 'motivo_rechazo', 'foto_evidencia_antes')
+        ('Seguimiento', {
+            'fields': ('vista_seguimiento',),
         }),
     )
+    add_fieldsets = (
+        ('Nuevo reclamo', {
+            'fields': ('descripcion', 'prioridad', 'equipo_etc', 'componente',
+                       'agencia_responsable', 'responsable_asignado'),
+        }),
+    )
+    # Una vez creado: el número, el origen y lo que cargó el técnico solo se consultan
+    readonly_fields = ('id_reclamo', 'vista_origen', 'descripcion', 'fecha_reclamo', 'fecha_limite',
+                       'observaciones_cierre', 'vista_fotos', 'vista_ubicacion', 'vista_seguimiento')
+
+    def get_inlines(self, request, obj):
+        return self.inlines if obj is not None else ()   # un reclamo nuevo no tiene historial
+
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        extra_context = {**(extra_context or {}), 'show_save_and_add_another': False}
+        return super().change_view(request, object_id, form_url, extra_context)
 
     def get_fieldsets(self, request, obj=None):
-        # La evidencia va primero solo cuando hay algo que validar
-        fieldsets = super().get_fieldsets(request, obj)
-        if obj is None or not (obj.foto_evidencia_despues or obj.observaciones_cierre):
-            fieldsets = fieldsets[1:] + fieldsets[:1]
-        return fieldsets
+        if obj is None:
+            return self.add_fieldsets
+        if not (obj.foto_evidencia_antes or obj.foto_evidencia_despues):
+            return self.fieldsets
+        # Con algo que validar, la evidencia va primero; si no, al final
+        if obj.estado == 'PENDIENTE_VALIDACION':
+            return (self.SECCION_EVIDENCIA, *self.fieldsets)
+        return (*self.fieldsets, self.SECCION_EVIDENCIA)
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj is None:
+            return ()
+        campos = self.readonly_fields
+        if obj.estado in reclamos.ESTADOS_FINALES:
+            campos += ('prioridad', 'agencia_responsable', 'responsable_asignado')
+        elif obj.estado == 'PENDIENTE_VALIDACION':
+            # Hay que validarlo o devolverlo antes de reasignarlo
+            campos += ('agencia_responsable', 'responsable_asignado')
+        return campos
+
+    def get_queryset(self, request):
+        # Mismo alcance por rol que la API; primero lo que requiere acción.
+        # Sin super(): el get_queryset de Django ordena antes de que exista la anotación.
+        qs = self.model._default_manager.get_queryset().annotate(orden_bandeja=Case(
+            When(estado='PENDIENTE_VALIDACION', then=Value(0)),
+            When(estado__in=reclamos.ESTADOS_ACTIVOS, then=Value(1)),
+            default=Value(2), output_field=IntegerField(),
+        ))
+        return filtrar_reclamos_por_rol(request.user, qs.order_by(*self.get_ordering(request)))
+
+    def get_ordering(self, request):
+        return ('orden_bandeja', 'fecha_limite', '-fecha_reclamo')
 
     # --- Indicadores ---
     def get_urls(self):
@@ -479,13 +542,12 @@ class ReclamoAdmin(admin.ModelAdmin):
                 request._reclamo_sin_guardar = True
                 self.message_user(request, f'No se guardó {obj.id_reclamo}: {e.mensaje}', messages.ERROR)
             return
-        obj.estado = 'ASIGNADO' if obj.responsable_asignado else 'ABIERTO'
-        if obj.responsable_asignado:
-            obj.fecha_asignacion = timezone.now()
+        # Alta: número, origen, estado y plazo los completa el servicio (preparar_nuevo)
+        for campo, valor in form.datos_nuevos.items():
+            setattr(obj, campo, valor)
         obj.fecha_limite = reclamos.calcular_fecha_limite(timezone.now(), obj.prioridad)
         super().save_model(request, obj, form, change)
-        reclamos.registrar(obj, request.user, estado_nuevo=obj.estado,
-                           detalle='Cargado a mano desde el admin', comentario=comentario)
+        reclamos.registrar(obj, request.user, estado_nuevo=obj.estado, detalle='Cargado a mano desde el admin')
 
     def message_user(self, request, message, level=messages.INFO, *args, **kwargs):
         # Si el servicio rechazó el cambio, no mostrar además "se modificó con éxito"
@@ -498,11 +560,11 @@ class ReclamoAdmin(admin.ModelAdmin):
         return request.user.es_admin_eam and super().has_delete_permission(request, obj)
 
     # --- Columnas ---
-    @admin.display(description='Equipo', ordering='componente__id_componente')
+    @admin.display(description='Equipo', ordering='componente__sitio__id_sitio')
     def equipo(self, obj):
         if obj.equipo_etc:
             return f'ETC {obj.equipo_etc.nro_equipo}'
-        return obj.componente.id_componente if obj.componente else '—'
+        return f'Regulador {obj.componente.sitio.id_sitio}' if obj.componente else '—'
 
     @admin.display(description='Estado', ordering='estado')
     def estado_badge(self, obj):
@@ -519,13 +581,9 @@ class ReclamoAdmin(admin.ModelAdmin):
         restante = obj.fecha_limite - timezone.now()
         if restante.total_seconds() < 0:
             return format_html('<span class="sg-badge sg-plazo-vencido">Vencido hace {}</span>',
-                               texto_duracion(-restante))
+                               indicadores.texto_duracion(-restante))
         clase = 'sg-plazo-proximo' if restante.total_seconds() < 86400 else 'sg-plazo-ok'
-        return format_html('<span class="sg-badge {}">Vence en {}</span>', clase, texto_duracion(restante))
-
-    @admin.display(boolean=True, description='Evidencia')
-    def tiene_evidencia(self, obj):
-        return bool(obj.foto_evidencia_despues)
+        return format_html('<span class="sg-badge {}">Vence en {}</span>', clase, indicadores.texto_duracion(restante))
 
     @admin.display(description='Fotos del técnico')
     def vista_fotos(self, obj):
@@ -538,20 +596,44 @@ class ReclamoAdmin(admin.ModelAdmin):
             obj.distancia_evidencia_m, obj.ubicacion_evidencia, obj.precision_evidencia_m,
             'Sin GPS' if obj.foto_evidencia_despues else 'Todavía no se envió la evidencia')
 
-    # Lo que viene de la verificación de campo: el supervisor no lo reescribe
-    CAMPOS_DE_ORIGEN = ('id_reclamo', 'verificacion', 'componente', 'verificacion_etc', 'equipo_etc',
-                        'origen_reclamo', 'foto_evidencia_antes')
+    @admin.display(description='Origen')
+    def vista_origen(self, obj):
+        def enlace(nombre_url, objeto, texto):
+            return format_html('<a href="{}">{}</a>', reverse(nombre_url, args=[objeto.pk]), texto)
+        partes = []
+        if obj.verificacion_etc_id:
+            partes.append(format_html('Verificación {}', enlace('admin:operaciones_verificacionetc_change',
+                                                               obj.verificacion_etc, obj.verificacion_etc.id_verificacion)))
+        elif obj.verificacion_id:
+            partes.append(format_html('Verificación {}', enlace('admin:operaciones_verificacion_change',
+                                                               obj.verificacion, obj.verificacion.id_verificacion)))
+        else:
+            partes.append(obj.get_origen_reclamo_display())
+        if obj.equipo_etc_id:
+            partes.append(enlace('admin:inventario_equipoetc_change', obj.equipo_etc, f'ETC {obj.equipo_etc.nro_equipo}'))
+        if obj.componente_id:
+            partes.append(enlace('admin:inventario_componente_change', obj.componente,
+                                 f'Regulador {obj.componente.sitio.id_sitio} ({obj.componente.id_componente})'))
+        return format_html_join(' · ', '{}', ((p,) for p in partes))
 
-    def get_readonly_fields(self, request, obj=None):
-        campos = super().get_readonly_fields(request, obj)
-        if obj is not None and not request.user.es_admin_eam:
-            campos = tuple(campos) + self.CAMPOS_DE_ORIGEN
-        if obj is not None and obj.estado in reclamos.ESTADOS_FINALES:
-            # Terminado: solo se consulta (admin EAM puede reabrirlo cambiando el estado)
-            campos = tuple(dict.fromkeys(tuple(campos) + self.CAMPOS_DE_ORIGEN + (
-                'prioridad', 'agencia_responsable', 'responsable_asignado',
-                'requiere_intervencion', 'descripcion', 'tipo_reclamo', 'resultado')))
-        return campos
+    @admin.display(description='Fechas')
+    def vista_seguimiento(self, obj):
+        """Las fechas del recorrido en una sola tabla (solo las que ocurrieron)."""
+        validado = obj.fecha_validacion and format_html(
+            '{} <span class="sg-muted">por {}</span>', date_format(timezone.localtime(obj.fecha_validacion),
+                                                                    'DATETIME_FORMAT'),
+            obj.validado_por.get_full_name() or obj.validado_por.username if obj.validado_por else '—')
+        filas = [
+            ('Recibido', obj.fecha_reclamo), ('Asignado', obj.fecha_asignacion), ('Iniciado', obj.fecha_inicio),
+            ('Enviado a validación', obj.fecha_ejecucion), ('Validado', validado),
+            ('Rechazado' if obj.estado == 'RECHAZADO' else 'Cerrado', obj.fecha_cierre),
+        ]
+        filas = [(t, v if not hasattr(v, 'tzinfo') else date_format(timezone.localtime(v), 'DATETIME_FORMAT'))
+                 for t, v in filas if v]
+        if obj.estado == 'RECHAZADO' and obj.motivo_rechazo:
+            filas.append(('Motivo del rechazo', obj.motivo_rechazo))
+        return format_html('<table class="sg-seguimiento">{}</table>',
+                           format_html_join('', '<tr><th>{}</th><td>{}</td></tr>', filas))
 
     @admin.action(description='Validar y cerrar los reclamos seleccionados')
     def validar_y_cerrar(self, request, queryset):
@@ -572,7 +654,3 @@ class ReclamoAdmin(admin.ModelAdmin):
         for error in errores:
             self.message_user(request, error, messages.ERROR)
 
-    def get_queryset(self, request):
-        # Mismo alcance por rol que la API (admin_eam/superusuario ven todo,
-        # supervisores ven sus agencias asignadas).
-        return filtrar_reclamos_por_rol(request.user, super().get_queryset(request))

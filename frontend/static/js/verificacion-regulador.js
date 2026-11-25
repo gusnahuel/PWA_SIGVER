@@ -2,17 +2,17 @@
  * SIGVER - Verificación de regulador: formulario en 4 pasos (datos y GPS,
  * fotos, mediciones, reclamo/resumen). Sin señal se guarda en la cola offline.
  */
-import { guardarVerificacionOffline } from './db.js?v=119';
-import { datosGps, seguirUbicacion, sugerirCoincidencia } from './gps.js?v=119';
-import { estado } from './estado.js?v=119';
-import { fetchConTimeout, esErrorDeRed, describirErrorServidor } from './api.js?v=119';
-import { comprimirImagen, escapeHtml, generarIdLocal, generarUUID } from './util.js?v=119';
+import { guardarVerificacionOffline } from './db.js?v=121';
+import { datosGps, seguirUbicacion, sugerirCoincidencia } from './gps.js?v=121';
+import { estado } from './estado.js?v=121';
+import { fetchConTimeout, esErrorDeRed, describirErrorServidor } from './api.js?v=121';
+import { comprimirImagen, escapeHtml, generarIdLocal, generarUUID } from './util.js?v=121';
 import {
     abrirPanel, avisarSoloCelular, cerrarPanel, cerrarPopupsMapa, esEscritorio,
     repintarSegmentados, showToast,
-} from './ui.js?v=119';
-import { actualizarContadorPendientes } from './sync.js?v=119';
-import { obtenerEnsayosPat, obtenerTermografias, reiniciarMediciones } from './mediciones.js?v=119';
+} from './ui.js?v=121';
+import { actualizarContadorPendientes } from './sync.js?v=121';
+import { obtenerEnsayosPat, obtenerTermografias, reiniciarMediciones } from './mediciones.js?v=121';
 
 const TOTAL_PASOS = 4;
 const FOTOS_REGULADOR = ['reg-foto-frontal', 'reg-foto-entorno', 'reg-foto-control'];

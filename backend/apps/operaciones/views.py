@@ -6,6 +6,7 @@ import logging
 from io import BytesIO
 
 from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.staticfiles import finders
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404
@@ -22,7 +23,7 @@ from apps.inventario.models import Personal
 from apps.usuarios.permisos import (
     SoloLecturaParaConsulta, filtrar_personal_por_rol, filtrar_reclamos_por_rol, filtrar_verificaciones_por_rol,
 )
-from . import reclamos
+from . import geo, reclamos
 from .models import (
     PuntoInspeccionTermografia, Reclamo, TipoFallaETC, Verificacion, VerificacionETC,
 )
@@ -180,38 +181,84 @@ def imagen_a_base64(imagen, max_size=(800, 800)):
         return None
 
 
+# Tono del veredicto del acta (mismo criterio de colores que el admin y el mapa)
+TONO_ESTADO_SITIO = {'NORMAL': 'ok', 'OBSERVADO': 'aviso', 'CRITICO': 'peligro', 'FUERA_SERVICIO': 'peligro'}
+
+
+def _ubicacion_del_acta(verificacion):
+    """Qué dice el acta sobre dónde estaba el técnico (la distancia la midió el servidor)."""
+    punto = verificacion.ubicacion_capturada
+    if punto is None:
+        declarada = verificacion.get_ubicacion_coincide_display() or 'sin dato'
+        return {'texto': 'Sin GPS', 'detalle': f'Coincidencia declarada por el técnico: {declarada.lower()}',
+                'tono': 'neutro'}
+    metros = verificacion.distancia_equipo_m
+    tono = {'SI': 'ok', 'APROXIMADA': 'aviso', 'NO': 'peligro'}[geo.coincide(metros)] if metros is not None else 'neutro'
+    return {
+        'texto': geo.texto_distancia(metros) if metros is not None else 'Registrada',
+        'detalle': f'{punto.y:.6f}, {punto.x:.6f}'
+                   + (f' · GPS ±{verificacion.precision_gps_m} m' if verificacion.precision_gps_m is not None else ''),
+        'tono': tono,
+    }
+
+
 @staff_member_required
 def generar_informe_pdf(request, tipo, id):
-    """Informe PDF de una verificación. Solo accesible desde el admin (usuarios staff)."""
+    """Acta PDF de una verificación. Solo accesible desde el admin (usuarios staff)."""
     from weasyprint import HTML  # import diferido: carga pesada
 
     # Mismo alcance por rol que el admin: un supervisor no descarga informes de otras zonas
     if tipo == 'etc':
         verificacion = get_object_or_404(
-            filtrar_verificaciones_por_rol(request.user, VerificacionETC.objects.all()), id=id)
-        contexto = {
-            'verificacion': verificacion,
-            'tipo': 'ETC',
-            'foto_b64': imagen_a_base64(verificacion.foto),
-        }
+            filtrar_verificaciones_por_rol(request.user, VerificacionETC.objects.select_related(
+                'equipo_etc__alimentador__subestacion', 'equipo_etc__sitio', 'responsable', 'agencia_responsable',
+            )), id=id)
+        fotos = [('Equipo', imagen_a_base64(verificacion.foto))]
+        if verificacion.tiene_inconveniente:
+            veredicto = {'texto': 'Con falla', 'tono': 'peligro'}
+        else:
+            veredicto = {'texto': 'Operativo', 'tono': 'ok'}
+        contexto = {'tipo': 'ETC', 'nombre_tipo': 'Equipo telecomandado (ETC)',
+                    'fallas': verificacion.fallas.order_by('numero')}
     elif tipo == 'regulador':
         verificacion = get_object_or_404(
-            filtrar_verificaciones_por_rol(request.user, Verificacion.objects.all()), id=id)
-        contexto = {
-            'verificacion': verificacion,
-            'tipo': 'REGULADOR',
-            'foto_frontal_b64': imagen_a_base64(verificacion.foto_frontal),
-            'foto_entorno_b64': imagen_a_base64(verificacion.foto_entorno),
-            'foto_control_b64': imagen_a_base64(verificacion.foto_control_unico),
-        }
+            filtrar_verificaciones_por_rol(request.user, Verificacion.objects.select_related(
+                'sitio__alimentador__subestacion', 'sitio__agencia', 'componente', 'responsable',
+                'agencia_responsable',
+            )), id=id)
+        fotos = [('Frontal', imagen_a_base64(verificacion.foto_frontal)),
+                 ('Entorno', imagen_a_base64(verificacion.foto_entorno)),
+                 ('Control único', imagen_a_base64(verificacion.foto_control_unico))]
+        veredicto = {'texto': verificacion.get_estado_sitio_display() or 'Sin dato',
+                     'tono': TONO_ESTADO_SITIO.get(verificacion.estado_sitio, 'neutro')}
+        contexto = {'tipo': 'REGULADOR', 'nombre_tipo': 'Regulador de tensión',
+                    'mediciones': verificacion.mediciones_termografia.select_related('punto').order_by('fecha_hora'),
+                    'ensayos': verificacion.ensayos_pat.prefetch_related('lecturas')}
     else:
         raise Http404('Tipo de informe desconocido.')
 
-    contexto['fecha_actual'] = timezone.now()
+    if verificacion.requiere_reclamo:
+        veredicto['detalle'] = f'Requiere intervención · prioridad {verificacion.get_prioridad_display().lower() or "media"}'
+    else:
+        veredicto['detalle'] = 'Sin reclamo de mantenimiento'
+
+    contexto.update(
+        verificacion=verificacion,
+        veredicto=veredicto,
+        ubicacion=_ubicacion_del_acta(verificacion),
+        fotos=[(titulo, b64) for titulo, b64 in fotos if b64],
+        reclamos=verificacion.reclamos.order_by('fecha_reclamo'),
+        fecha_actual=timezone.now(),
+        emitido_por=request.user.get_full_name() or request.user.username,
+        # Archivos locales: el PDF se arma sin pedir nada a internet
+        fuente_inter=finders.find('vendor/inter-5.2.5/inter-latin-wght-normal.woff2'),
+        fuente_inter_ext=finders.find('vendor/inter-5.2.5/inter-latin-ext-wght-normal.woff2'),
+        logo=finders.find('icons/icon-maskable.svg'),
+    )
     html_string = render_to_string('reportes/informe_verificacion.html', contexto, request=request)
     pdf = HTML(string=html_string).write_pdf()
 
     response = HttpResponse(pdf, content_type='application/pdf')
-    response['Content-Disposition'] = f'inline; filename="informe_{tipo}_{id}.pdf"'
+    response['Content-Disposition'] = f'inline; filename="acta_{verificacion.id_verificacion}.pdf"'
     response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     return response

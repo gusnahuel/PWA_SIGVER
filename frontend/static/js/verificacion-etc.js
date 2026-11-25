@@ -2,16 +2,16 @@
  * SIGVER - Verificación de ETC (equipo telecomandado): formulario simple con
  * foto, fallas y reclamo opcional. Si no hay señal se guarda en la cola offline.
  */
-import { guardarVerificacionOffline } from './db.js?v=119';
-import { datosGps, seguirUbicacion } from './gps.js?v=119';
-import { estado } from './estado.js?v=119';
-import { fetchConToken, fetchConTimeout, esErrorDeRed, describirErrorServidor } from './api.js?v=119';
-import { comprimirImagen, generarIdLocal, generarUUID } from './util.js?v=119';
+import { guardarVerificacionOffline } from './db.js?v=121';
+import { datosGps, seguirUbicacion, sugerirCoincidencia } from './gps.js?v=121';
+import { estado } from './estado.js?v=121';
+import { fetchConToken, fetchConTimeout, esErrorDeRed, describirErrorServidor } from './api.js?v=121';
+import { comprimirImagen, generarIdLocal, generarUUID } from './util.js?v=121';
 import {
     abrirPanel, avisarSoloCelular, cerrarPanel, cerrarPopupsMapa, esEscritorio,
     repintarSegmentados, showToast,
-} from './ui.js?v=119';
-import { actualizarContadorPendientes } from './sync.js?v=119';
+} from './ui.js?v=121';
+import { actualizarContadorPendientes } from './sync.js?v=121';
 
 let equipoSeleccionadoId = null;
 let posicionActual = () => null;   // GPS del formulario abierto (ver gps.js)
@@ -31,7 +31,14 @@ export function abrirFormularioVerificacion(equipoId, nroEquipo) {
     document.querySelectorAll('.checkbox-falla').forEach((cb) => { cb.checked = false; });
     document.getElementById('preview-foto').style.display = 'none';
     const equipo = estado.equipos.find((e) => String(e.properties.id ?? e.id) === String(equipoId));
-    posicionActual = seguirUbicacion('verif', equipo);
+    // Con GPS se sugiere la respuesta (el servidor recalcula y decide); sin GPS vale lo que elija el técnico
+    posicionActual = seguirUbicacion('verif', equipo, (posicion, metros) => {
+        const select = document.getElementById('verif-ubicacion-coincide');
+        if (metros === null || select.dataset.tocado) return;
+        select.value = sugerirCoincidencia(metros);
+        select.dispatchEvent(new Event('change'));
+        delete select.dataset.tocado;
+    });
 }
 
 // ==========================================
@@ -148,6 +155,7 @@ document.getElementById('form-verificacion').addEventListener('submit', async (e
         observaciones,
         requiere_reclamo: requiereReclamo,
         prioridad: requiereReclamo ? prioridad : '',
+        ubicacion_coincide: document.getElementById('verif-ubicacion-coincide').value,
         ...datosGps(posicionActual()),
     };
 

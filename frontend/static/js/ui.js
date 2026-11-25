@@ -2,7 +2,7 @@
  * SIGVER - Piezas de interfaz compartidas: notificaciones, paneles, menú,
  * contadores, botones segmentados y el registro de acciones de los botones.
  */
-import { escapeHtml } from './util.js?v=119';
+import { escapeHtml } from './util.js?v=121';
 
 // ==========================================
 // Acciones: data-accion="nombre" en el HTML en lugar de onclick="..."

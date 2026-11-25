@@ -2,9 +2,9 @@
  * SIGVER - Mediciones del formulario de reguladores (paso 3):
  * termografías y ensayos de puesta a tierra (PAT), con alta, edición y borrado.
  */
-import { fetchConToken } from './api.js?v=119';
-import { escapeHtml, generarIdLocal } from './util.js?v=119';
-import { abrirModal, cerrarModal, registrarAcciones } from './ui.js?v=119';
+import { fetchConToken } from './api.js?v=121';
+import { escapeHtml, generarIdLocal } from './util.js?v=121';
+import { abrirModal, cerrarModal, registrarAcciones } from './ui.js?v=121';
 
 let termografias = [];
 let indiceEdicionTermografia = -1; // -1 = agregando una nueva
@@ -24,8 +24,6 @@ export function reiniciarMediciones() {
     actualizarListaEnsayosPat();
 }
 
-const mostrarModal = (id) => abrirModal(id);
-const ocultarModal = (id) => cerrarModal(id);
 
 // ==========================================
 // Termografía
@@ -87,10 +85,10 @@ document.getElementById('btn-add-termografia').addEventListener('click', () => {
         document.getElementById(id).value = '';
     });
     llenarSelectPuntos();
-    mostrarModal('modal-termografia');
+    abrirModal('modal-termografia');
 });
 
-document.getElementById('btn-cancelar-term').addEventListener('click', () => ocultarModal('modal-termografia'));
+document.getElementById('btn-cancelar-term').addEventListener('click', () => cerrarModal('modal-termografia'));
 
 document.getElementById('btn-guardar-term').addEventListener('click', () => {
     const punto = document.getElementById('term-punto').value;
@@ -120,7 +118,7 @@ document.getElementById('btn-guardar-term').addEventListener('click', () => {
     else termografias[indiceEdicionTermografia] = medicion;
 
     actualizarListaTermografias();
-    ocultarModal('modal-termografia');
+    cerrarModal('modal-termografia');
 });
 
 function editarTermografia(index) {
@@ -131,7 +129,7 @@ function editarTermografia(index) {
     document.getElementById('term-temp-punto').value = term.temperatura_punto_c;
     document.getElementById('term-temp-amb').value = term.temperatura_ambiente_c || '';
     document.getElementById('term-corriente').value = term.corriente_a || '';
-    mostrarModal('modal-termografia');
+    abrirModal('modal-termografia');
 }
 
 function eliminarTermografia(index) {
@@ -193,10 +191,10 @@ document.getElementById('btn-add-pat').addEventListener('click', () => {
         document.getElementById(id).value = '';
     });
     document.getElementById('lista-lecturas-modal').innerHTML = '';
-    mostrarModal('modal-pat');
+    abrirModal('modal-pat');
 });
 
-document.getElementById('btn-cancelar-pat').addEventListener('click', () => ocultarModal('modal-pat'));
+document.getElementById('btn-cancelar-pat').addEventListener('click', () => cerrarModal('modal-pat'));
 
 document.getElementById('btn-add-lectura').addEventListener('click', () => {
     const dist = document.getElementById('pat-lect-dist').value;
@@ -236,7 +234,7 @@ document.getElementById('btn-guardar-pat').addEventListener('click', () => {
     else ensayosPat[indiceEdicionPat] = ensayo;
 
     actualizarListaEnsayosPat();
-    ocultarModal('modal-pat');
+    cerrarModal('modal-pat');
 });
 
 function editarEnsayoPat(index) {
@@ -248,7 +246,7 @@ function editarEnsayoPat(index) {
     document.getElementById('pat-resultado').value = ensayo.resultado;
     lecturasTemporales = [...ensayo.lecturas];
     actualizarListaTemporalLecturas();
-    mostrarModal('modal-pat');
+    abrirModal('modal-pat');
 }
 
 function eliminarEnsayoPat(index) {

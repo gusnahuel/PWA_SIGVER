@@ -76,6 +76,22 @@ Let's Encrypt) como `nginx/certs/servidor.crt` y `nginx/certs/servidor.key`, y s
 usa `DJANGO_SETTINGS_MODULE=config.settings.prod` (cookies seguras y HSTS).
 La carpeta `nginx/certs/` está en `.gitignore`: las claves privadas nunca van al repositorio.
 
+### Pruebas por internet (supervisores, con wifi o datos móviles)
+
+`scripts/ngrok.sh` publica SIGVER con ngrok: HTTPS válido, sin instalar la CA en
+los celulares. Mientras corre, Django usa la configuración de producción (sin DEBUG),
+solo acepta la dirección de ngrok y no se publican los puertos 8000 ni 5432
+(`docker-compose.ngrok.yml`). Ctrl+C lo corta y vuelve al modo desarrollo.
+
+1. **Una sola vez:** crear una cuenta gratis en ngrok, correr
+   `ngrok config add-authtoken <TOKEN>` y poner el dominio fijo gratis de la cuenta
+   en el `.env` (`NGROK_DOMAIN=algo.ngrok-free.app`). El dominio fijo importa:
+   si cambiara, la app instalada en los celulares y su cola sin señal quedarían en la dirección vieja.
+2. `scripts/ngrok.sh` y pasar a los supervisores `https://<NGROK_DOMAIN>/`.
+
+Mientras está activo, en esta PC también se entra por la dirección de ngrok
+(`http://localhost` redirige a HTTPS). La PC tiene que estar prendida y con internet.
+
 ### Publicar una versión nueva de la PWA
 
 ```bash
