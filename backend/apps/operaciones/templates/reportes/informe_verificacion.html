@@ -286,10 +286,18 @@
             <div class="dato"><span class="etq">Tipo de banco</span><span class="val">{{ verificacion.get_tipo_banco_verificado_display|default:"—" }}</span></div>
             <div class="dato"><span class="etq">Valla perimetral</span><span class="val">{{ verificacion.valla_perimetral|yesno:"Sí,No,Sin dato" }}</span></div>
             <div class="dato"><span class="etq">Híbrido</span><span class="val">{{ verificacion.es_hibrido|yesno:"Sí,No,Sin dato" }}</span></div>
+            <div class="dato"><span class="etq">Estado del regulador</span><span class="val">{{ verificacion.get_estado_componente_display|default:"—" }}</span></div>
+            <div class="dato"><span class="etq">Estado del control</span><span class="val">{{ verificacion.estado_control|default:"—" }}</span></div>
             <div class="dato"><span class="etq">Reclamo</span>
                 <span class="val">{% if verificacion.requiere_reclamo %}Sí · prioridad {{ verificacion.get_prioridad_display|lower }}{% else %}No{% endif %}</span></div>
             {% if verificacion.configuracion_observada %}
             <div class="dato completo"><span class="etq">Configuración observada</span><span class="val">{{ verificacion.configuracion_observada }}</span></div>
+            {% endif %}
+            {% if verificacion.observaciones_componente %}
+            <div class="dato completo"><span class="etq">Observaciones del regulador</span><p class="val texto-libre">{{ verificacion.observaciones_componente }}</p></div>
+            {% endif %}
+            {% if verificacion.observaciones_control %}
+            <div class="dato completo"><span class="etq">Observaciones del control</span><p class="val texto-libre">{{ verificacion.observaciones_control }}</p></div>
             {% endif %}
             {% if verificacion.observaciones_control_unico %}
             <div class="dato completo"><span class="etq">Observaciones del control único</span><p class="val texto-libre">{{ verificacion.observaciones_control_unico }}</p></div>

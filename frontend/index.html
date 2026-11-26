@@ -16,8 +16,8 @@
     <link rel="preload" href="/static/vendor/inter-5.2.5/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 
     <!-- Nuestro CSS: variables compartidas con el admin + estilos de la app -->
-    <link rel="stylesheet" href="/static/css/tokens.css?v=122">
-    <link rel="stylesheet" href="/static/css/style.css?v=122">
+    <link rel="stylesheet" href="/static/css/tokens.css?v=123">
+    <link rel="stylesheet" href="/static/css/style.css?v=123">
 
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#002f6c">
@@ -399,6 +399,31 @@
                         <input type="text" id="reg-config-obs" class="form-control" placeholder="Ej: sobre base de metal">
                     </div>
                 </section>
+
+                <section class="tarjeta">
+                    <div class="tarjeta-titulo"><span>Regulador y control</span></div>
+                    <div class="campo">
+                        <span class="field-label">Estado del regulador</span>
+                        <div class="segmented estados" data-for="reg-estado-componente"></div>
+                        <select id="reg-estado-componente" hidden>
+                            <option value="OPERATIVO" data-color="#047857">Operativo</option>
+                            <option value="OPERATIVO_OBS" data-color="#d97706">Con observaciones</option>
+                            <option value="FUERA_SERVICIO" data-color="#475569">Fuera de servicio</option>
+                        </select>
+                    </div>
+                    <div class="campo">
+                        <label for="reg-obs-componente" class="field-label">Observaciones del regulador</label>
+                        <textarea id="reg-obs-componente" class="form-control" rows="2" maxlength="500" placeholder="Ej: descargadores de fase S averiados"></textarea>
+                    </div>
+                    <div class="campo">
+                        <label for="reg-estado-control" class="field-label">Estado del control</label>
+                        <input type="text" id="reg-estado-control" class="form-control" maxlength="30" placeholder="Ej: OK, sin señal 4G">
+                    </div>
+                    <div class="campo" style="margin-bottom: 0;">
+                        <label for="reg-obs-control" class="field-label">Observaciones del control</label>
+                        <textarea id="reg-obs-control" class="form-control" rows="2" maxlength="500" placeholder="Ej: no se alcanza desde el suelo"></textarea>
+                    </div>
+                </section>
             </div>
 
             <!-- PASO 2: FOTOS -->
@@ -719,6 +744,6 @@
     <script src="/static/vendor/leaflet-1.9.4/leaflet.js"></script>
     <script src="/static/vendor/markercluster-1.5.3/leaflet.markercluster.js"></script>
     <!-- Nuestro JS -->
-    <script type="module" src="/static/js/app.js?v=122"></script>
+    <script type="module" src="/static/js/app.js?v=123"></script>
 </body>
 </html>

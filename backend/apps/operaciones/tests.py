@@ -1082,3 +1082,45 @@ class MedicionesTests(BaseSigverTest):
         res = self.cliente(self.tecnico).post(self.url, datos, format='multipart')
         self.assertEqual(res.status_code, 400)
         self.assertFalse(Verificacion.objects.filter(client_uuid=datos['client_uuid']).exists())
+
+
+class EstadoReguladorTests(BaseSigverTest):
+    """Estado del regulador y de su control: queda en la verificación y la última lo pasa al Componente."""
+    url = '/api/operaciones/verificaciones/'
+
+    def enviar(self, cuando, **extra):
+        datos = self.datos_regulador(fecha_verificacion=cuando.isoformat(), **extra)
+        res = self.cliente(self.tecnico).post(self.url, datos, format='multipart')
+        self.assertEqual(res.status_code, 201, res.data)
+        return Verificacion.objects.get(client_uuid=datos['client_uuid'])
+
+    def test_se_guarda_y_pasa_al_regulador(self):
+        v = self.enviar(timezone.now(), estado_componente='OPERATIVO_OBS',
+                        observaciones_componente='descargador fase S averiado',
+                        estado_control='sin señal 4G', observaciones_control='no se alcanza desde el suelo')
+        self.assertEqual(v.get_estado_componente_display(), 'Operativo con observaciones')
+        self.componente.refresh_from_db()
+        self.assertEqual(
+            (self.componente.estado_componente, self.componente.observaciones_componente,
+             self.componente.estado_control, self.componente.observaciones_control),
+            ('Operativo con observaciones', 'descargador fase S averiado',
+             'sin señal 4G', 'no se alcanza desde el suelo'))
+
+    def test_una_verificacion_atrasada_no_pisa_la_mas_nueva(self):
+        ahora = timezone.now()
+        self.enviar(ahora, estado_componente='FUERA_SERVICIO', estado_control='sin comunicación')
+        # llega después desde la cola sin señal, pero se hizo antes
+        self.enviar(ahora - timezone.timedelta(days=2), estado_componente='OPERATIVO', estado_control='OK')
+        self.componente.refresh_from_db()
+        self.assertEqual((self.componente.estado_componente, self.componente.estado_control),
+                         ('Fuera de servicio', 'sin comunicación'))
+
+    def test_fuera_de_servicio_no_obliga_a_reclamar(self):
+        v = self.enviar(timezone.now(), estado_componente='FUERA_SERVICIO')
+        self.assertFalse(v.requiere_reclamo)
+
+    def test_sin_datos_del_regulador_no_borra_lo_anterior(self):
+        self.enviar(timezone.now() - timezone.timedelta(hours=1), estado_componente='OPERATIVO', estado_control='OK')
+        self.enviar(timezone.now())   # app vieja: no manda estos campos
+        self.componente.refresh_from_db()
+        self.assertEqual(self.componente.estado_control, 'OK')

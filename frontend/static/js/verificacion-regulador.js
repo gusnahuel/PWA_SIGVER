@@ -2,19 +2,19 @@
  * SIGVER - Verificación de regulador: formulario en 4 pasos (datos y GPS,
  * fotos, mediciones, reclamo/resumen). Sin señal se guarda en la cola offline.
  */
-import { guardarVerificacionOffline } from './db.js?v=122';
-import { datosGps, seguirUbicacion, sugerirCoincidencia } from './gps.js?v=122';
-import { estado } from './estado.js?v=122';
-import { fetchConTimeout, esErrorDeRed, describirErrorServidor } from './api.js?v=122';
+import { guardarVerificacionOffline } from './db.js?v=123';
+import { datosGps, seguirUbicacion, sugerirCoincidencia } from './gps.js?v=123';
+import { estado } from './estado.js?v=123';
+import { fetchConTimeout, esErrorDeRed, describirErrorServidor } from './api.js?v=123';
 import {
     agregarEnsayosPat, comprimirImagen, escapeHtml, generarIdLocal, generarUUID, nivelTermografico,
-} from './util.js?v=122';
+} from './util.js?v=123';
 import {
     abrirPanel, avisarSoloCelular, cerrarPanel, cerrarPopupsMapa, esEscritorio,
     repintarSegmentados, showToast,
-} from './ui.js?v=122';
-import { actualizarContadorPendientes } from './sync.js?v=122';
-import { obtenerEnsayosPat, obtenerTermografias, reiniciarMediciones } from './mediciones.js?v=122';
+} from './ui.js?v=123';
+import { actualizarContadorPendientes } from './sync.js?v=123';
+import { obtenerEnsayosPat, obtenerTermografias, reiniciarMediciones } from './mediciones.js?v=123';
 
 const TOTAL_PASOS = 4;
 const FOTOS_REGULADOR = ['reg-foto-frontal', 'reg-foto-entorno', 'reg-foto-control'];
@@ -159,6 +159,8 @@ function actualizarResumenRegulador() {
     const fotos = contarFotosRegulador();
     const filas = [
         ['Estado del sitio', textoSelect('reg-estado-sitio')],
+        ['Regulador', textoSelect('reg-estado-componente')],
+        ['Control', document.getElementById('reg-estado-control').value.trim() || 'Sin dato'],
         ['Ubicación coincide', textoSelect('reg-ubicacion-coincide')],
         ['Fotos', `${fotos} de 3`],
         ['Termografía', termografias.length
@@ -209,6 +211,10 @@ document.getElementById('form-regulador').addEventListener('submit', async (e) =
         es_hibrido: valor('reg-hibrido') === 'true',
         configuracion_observada: valor('reg-config-obs'),
         estado_sitio: valor('reg-estado-sitio'),
+        estado_componente: valor('reg-estado-componente'),
+        observaciones_componente: valor('reg-obs-componente').trim(),
+        estado_control: valor('reg-estado-control').trim(),
+        observaciones_control: valor('reg-obs-control').trim(),
         observaciones: valor('reg-observaciones'),
         ubicacion_coincide: valor('reg-ubicacion-coincide'),
         requiere_reclamo: requiereReclamo,

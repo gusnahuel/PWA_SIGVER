@@ -2,7 +2,7 @@
  * SIGVER - Service Worker
  * Estrategias de cacheo diferenciadas para PWA offline-first.
  */
-const CACHE_NAME = 'sigver-v122';
+const CACHE_NAME = 'sigver-v123';
 const TILE_CACHE = 'sigver-tiles-v102'; // no cambiar: borraría los mapas offline
 
 // Recursos que se cachean al instalar (app shell): con esto la app arranca
@@ -11,25 +11,25 @@ const APP_SHELL = [
     '/',
     // Con ?v=: nginx sirve /static/ como "immutable", hay que cambiar la URL en cada versión
     // (lo hace scripts/version.sh)
-    '/static/css/tokens.css?v=122',
-    '/static/css/style.css?v=122',
-    '/static/js/app.js?v=122',
-    '/static/js/db.js?v=122',
+    '/static/css/tokens.css?v=123',
+    '/static/css/style.css?v=123',
+    '/static/js/app.js?v=123',
+    '/static/js/db.js?v=123',
     // Módulos que importa app.js: si falta uno, la app no arranca sin conexión
-    '/static/js/estado.js?v=122',
-    '/static/js/util.js?v=122',
-    '/static/js/api.js?v=122',
-    '/static/js/ui.js?v=122',
-    '/static/js/sesion.js?v=122',
-    '/static/js/mapa.js?v=122',
-    '/static/js/busqueda.js?v=122',
-    '/static/js/gps.js?v=122',
-    '/static/js/verificacion-etc.js?v=122',
-    '/static/js/verificacion-regulador.js?v=122',
-    '/static/js/mediciones.js?v=122',
-    '/static/js/reclamos.js?v=122',
-    '/static/js/sync.js?v=122',
-    '/static/js/actualizaciones.js?v=122',
+    '/static/js/estado.js?v=123',
+    '/static/js/util.js?v=123',
+    '/static/js/api.js?v=123',
+    '/static/js/ui.js?v=123',
+    '/static/js/sesion.js?v=123',
+    '/static/js/mapa.js?v=123',
+    '/static/js/busqueda.js?v=123',
+    '/static/js/gps.js?v=123',
+    '/static/js/verificacion-etc.js?v=123',
+    '/static/js/verificacion-regulador.js?v=123',
+    '/static/js/mediciones.js?v=123',
+    '/static/js/reclamos.js?v=123',
+    '/static/js/sync.js?v=123',
+    '/static/js/actualizaciones.js?v=123',
     '/manifest.json',
     '/static/icons/icon.svg?v=2',
     // Librerías propias (antes venían de CDNs y no estaban garantizadas offline)

@@ -109,7 +109,7 @@ class EnsayoPATInline(InmutableSalvoAdminEAM, admin.TabularInline):
 class VerificacionAdmin(AlcanceVerificacionesMixin, InmutableSalvoAdminEAM, GISModelAdmin):
     list_display = ('id_verificacion', 'sitio', 'fecha_verificacion', 'responsable',
                     'estado', 'requiere_reclamo', 'informe')
-    list_filter = ('estado_sitio', 'requiere_reclamo', 'agencia_responsable', 'responsable',
+    list_filter = ('estado_sitio', 'estado_componente', 'requiere_reclamo', 'agencia_responsable', 'responsable',
                    'tipo_banco_verificado', 'tipo_control_verificado')
     list_select_related = ('sitio', 'componente', 'responsable')
     search_fields = ('id_verificacion', 'sitio__id_sitio', 'componente__id_componente',
@@ -124,6 +124,8 @@ class VerificacionAdmin(AlcanceVerificacionesMixin, InmutableSalvoAdminEAM, GISM
         ('Estado del sitio', {'fields': ('estado_sitio', 'tipo_control_verificado', 'tipo_banco_verificado',
                                          'valla_perimetral', 'es_hibrido', 'configuracion_observada',
                                          'observaciones_control_unico', 'observaciones')}),
+        ('Regulador y control', {'fields': ('estado_componente', 'observaciones_componente',
+                                            'estado_control', 'observaciones_control')}),
         ('Fotos', {'fields': ('fotos', 'foto_frontal', 'foto_entorno', 'foto_control_unico')}),
         ('Ubicación GPS', {'fields': ('distancia_gps', 'ubicacion_coincide', 'ubicacion_capturada'),
                            'description': 'Con GPS, «ubicación coincide» lo calcula el servidor según la distancia.'}),

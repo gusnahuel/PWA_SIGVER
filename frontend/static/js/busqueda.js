@@ -1,10 +1,10 @@
 /**
  * SIGVER - Búsqueda de equipos (ETC y reguladores) por código, alimentador o subestación.
  */
-import { estado } from './estado.js?v=122';
-import { escapeHtml } from './util.js?v=122';
-import { abrirPanel, cerrarMenu, esEscritorio, registrarAcciones } from './ui.js?v=122';
-import { cerrarTarjetaEquipo } from './mapa.js?v=122';
+import { estado } from './estado.js?v=123';
+import { escapeHtml } from './util.js?v=123';
+import { abrirPanel, cerrarMenu, esEscritorio, registrarAcciones } from './ui.js?v=123';
+import { cerrarTarjetaEquipo } from './mapa.js?v=123';
 
 const MIN_LETRAS = 2;
 const MAX_RESULTADOS = 50; // más que esto traba los celulares de gama baja

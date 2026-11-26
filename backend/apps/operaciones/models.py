@@ -116,6 +116,20 @@ class Verificacion(models.Model):
     ]
     estado_sitio = models.CharField(max_length=20, choices=ESTADO_SITIO, blank=True)
 
+    # Estado del regulador y de su control en esta visita (hoja Componentes del Excel).
+    # La última verificación los copia al Componente (estado_red.por_verificacion_regulador).
+    ESTADO_COMPONENTE = [
+        ('OPERATIVO', 'Operativo'),
+        ('OPERATIVO_OBS', 'Operativo con observaciones'),
+        ('FUERA_SERVICIO', 'Fuera de servicio'),
+    ]
+    estado_componente = models.CharField('estado del regulador', max_length=20,
+                                         choices=ESTADO_COMPONENTE, blank=True)
+    observaciones_componente = models.TextField('observaciones del regulador', blank=True)
+    estado_control = models.CharField('estado del control', max_length=30, blank=True,
+                                      help_text='Lo escribe el técnico. Ej: OK, sin señal 4G.')
+    observaciones_control = models.TextField('observaciones del control', blank=True)
+
     observaciones_control_unico = models.TextField(blank=True)
     observaciones = models.TextField(blank=True)
 

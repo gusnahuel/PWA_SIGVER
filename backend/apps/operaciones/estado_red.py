@@ -14,7 +14,7 @@ algo (o '' si no hubo cambio).
 """
 from django.db.models import Q
 
-from apps.inventario.models import EquipoETC, Sitio
+from apps.inventario.models import Componente, EquipoETC, Sitio
 from .models import Reclamo, Verificacion
 
 ESTADOS_TERMINADOS = ('CERRADO', 'RECHAZADO')
@@ -44,6 +44,7 @@ def por_verificacion_etc(verificacion):
 
 def por_verificacion_regulador(verificacion):
     """Pasa al sitio el estado observado en la verificación, si es la más reciente."""
+    _componente_por_verificacion(verificacion)
     nuevo = verificacion.estado_sitio
     if not nuevo:
         return
@@ -55,6 +56,23 @@ def por_verificacion_regulador(verificacion):
     if nuevo == 'NORMAL' and _reclamos_activos(componente__sitio_id=verificacion.sitio_id).exists():
         return   # igual que en ETC: el reclamo abierto manda hasta que se cierre
     Sitio.objects.filter(pk=verificacion.sitio_id).update(estado_general=nuevo)
+
+
+def _componente_por_verificacion(verificacion):
+    """El estado del regulador y de su control que vio la última visita queda en el Componente."""
+    if not (verificacion.componente_id and (verificacion.estado_componente or verificacion.estado_control)):
+        return   # versiones anteriores de la app no envían estos datos
+    hay_posterior = Verificacion.objects.filter(
+        componente_id=verificacion.componente_id, fecha_verificacion__gt=verificacion.fecha_verificacion,
+    ).exclude(pk=verificacion.pk).exists()
+    if hay_posterior:
+        return
+    Componente.objects.filter(pk=verificacion.componente_id).update(
+        estado_componente=verificacion.get_estado_componente_display() if verificacion.estado_componente else '',
+        observaciones_componente=verificacion.observaciones_componente,
+        estado_control=verificacion.estado_control,
+        observaciones_control=verificacion.observaciones_control,
+    )
 
 
 # =====================================================
