@@ -16,8 +16,8 @@
     <link rel="preload" href="/static/vendor/inter-5.2.5/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 
     <!-- Nuestro CSS: variables compartidas con el admin + estilos de la app -->
-    <link rel="stylesheet" href="/static/css/tokens.css?v=123">
-    <link rel="stylesheet" href="/static/css/style.css?v=123">
+    <link rel="stylesheet" href="/static/css/tokens.css?v=127">
+    <link rel="stylesheet" href="/static/css/style.css?v=127">
 
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#002f6c">
@@ -321,7 +321,8 @@
                 <button type="button" class="paso-tab" data-ir-paso="0" role="tab"><span class="paso-barra"></span><span>1. Datos</span></button>
                 <button type="button" class="paso-tab" data-ir-paso="1" role="tab"><span class="paso-barra"></span><span>2. Fotos</span></button>
                 <button type="button" class="paso-tab" data-ir-paso="2" role="tab"><span class="paso-barra"></span><span>3. Medic.</span></button>
-                <button type="button" class="paso-tab" data-ir-paso="3" role="tab"><span class="paso-barra"></span><span>4. Reclamo</span></button>
+                <button type="button" class="paso-tab" data-ir-paso="3" role="tab"><span class="paso-barra"></span><span>4. Equipos</span></button>
+                <button type="button" class="paso-tab" data-ir-paso="4" role="tab"><span class="paso-barra"></span><span>5. Reclamo</span></button>
             </div>
         </div>
 
@@ -489,8 +490,23 @@
                 </section>
             </div>
 
-            <!-- PASO 4: RECLAMO Y RESUMEN -->
+            <!-- PASO 4: EQUIPOS DEL BANCO (datos de placa) -->
             <div class="paso" data-paso="3">
+                <section class="tarjeta">
+                    <div class="tarjeta-titulo">
+                        <span>Equipos del banco</span>
+                        <span class="chip" id="reg-elem-cuenta">Sin datos</span>
+                    </div>
+                    <p class="ayuda" style="margin: 0 0 12px;">Marca, modelo, serie y fotos de cada regulador del banco. Se cargan una vez; corregilos si cambió algo.</p>
+                    <div id="lista-elementos" class="lista-items"></div>
+                    <button type="button" id="btn-add-elemento" class="btn btn-outline btn-block">
+                        <i class="fa-solid fa-plus" aria-hidden="true"></i> Agregar unidad
+                    </button>
+                </section>
+            </div>
+
+            <!-- PASO 5: RECLAMO Y RESUMEN -->
+            <div class="paso" data-paso="4">
                 <section class="tarjeta">
                     <label class="switch-row">
                         <span>
@@ -557,6 +573,78 @@
             <div class="modal-actions">
                 <button type="button" id="btn-cancelar-term" class="btn btn-ghost">Cancelar</button>
                 <button type="button" id="btn-guardar-term" class="btn btn-primary">Agregar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: UNIDAD DEL BANCO (datos de placa) -->
+    <div id="modal-elemento" class="modal-overlay" role="dialog" aria-labelledby="titulo-elemento">
+        <div class="modal-card form">
+            <h3 id="titulo-elemento">Agregar unidad</h3>
+
+            <div class="form-group">
+                <label for="elem-identificador">Identificación</label>
+                <input type="text" id="elem-identificador" class="form-control" maxlength="100" placeholder="Ej: Unidad 1 · fase R">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="elem-marca">Marca</label>
+                    <input type="text" id="elem-marca" class="form-control" maxlength="100" placeholder="Ej: TOSHIBA" list="elem-marcas">
+                    <datalist id="elem-marcas"><option value="TOSHIBA"></option><option value="COOPER"></option></datalist>
+                </div>
+                <div class="form-group">
+                    <label for="elem-modelo">Modelo</label>
+                    <input type="text" id="elem-modelo" class="form-control" maxlength="100" placeholder="Ej: TIPO_B">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="elem-serie">N.º de serie</label>
+                <input type="text" id="elem-serie" class="form-control" maxlength="100" placeholder="Ej: E09341" autocapitalize="characters">
+            </div>
+            <div class="campo">
+                <span class="field-label">Estado</span>
+                <div class="segmented estados" data-for="elem-estado"></div>
+                <select id="elem-estado" hidden>
+                    <option value="Operativo" data-color="#047857">Operativo</option>
+                    <option value="Operativo con observaciones" data-color="#d97706">Con observaciones</option>
+                    <option value="Fuera de servicio" data-color="#475569">Fuera de servicio</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <span class="field-label">Fotos</span>
+                <div class="fotos-grid">
+                    <div class="foto-slot">
+                        <input type="file" id="elem-foto-equipo" accept="image/*" capture="environment" hidden>
+                        <label for="elem-foto-equipo" class="foto-tile" data-foto-elemento="equipo">
+                            <i class="fa-solid fa-camera" aria-hidden="true"></i><span>Tomar</span>
+                        </label>
+                        <div class="foto-nombre">Equipo</div>
+                    </div>
+                    <div class="foto-slot">
+                        <input type="file" id="elem-foto-placa" accept="image/*" capture="environment" hidden>
+                        <label for="elem-foto-placa" class="foto-tile" data-foto-elemento="placa">
+                            <i class="fa-solid fa-camera" aria-hidden="true"></i><span>Tomar</span>
+                        </label>
+                        <div class="foto-nombre">Placa</div>
+                    </div>
+                    <div class="foto-slot">
+                        <input type="file" id="elem-foto-control" accept="image/*" capture="environment" hidden>
+                        <label for="elem-foto-control" class="foto-tile" data-foto-elemento="control">
+                            <i class="fa-solid fa-camera" aria-hidden="true"></i><span>Tomar</span>
+                        </label>
+                        <div class="foto-nombre">Control</div>
+                    </div>
+                </div>
+                <p class="ayuda" id="elem-fotos-ayuda"></p>
+            </div>
+            <div class="form-group">
+                <label for="elem-observaciones">Observaciones</label>
+                <textarea id="elem-observaciones" class="form-control" rows="2" maxlength="500" placeholder="Ej: placa ilegible"></textarea>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" id="btn-cancelar-elemento" class="btn btn-ghost">Cancelar</button>
+                <button type="button" id="btn-guardar-elemento" class="btn btn-primary">Guardar unidad</button>
             </div>
         </div>
     </div>
@@ -744,6 +832,6 @@
     <script src="/static/vendor/leaflet-1.9.4/leaflet.js"></script>
     <script src="/static/vendor/markercluster-1.5.3/leaflet.markercluster.js"></script>
     <!-- Nuestro JS -->
-    <script type="module" src="/static/js/app.js?v=123"></script>
+    <script type="module" src="/static/js/app.js?v=127"></script>
 </body>
 </html>

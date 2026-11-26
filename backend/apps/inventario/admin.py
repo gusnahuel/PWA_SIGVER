@@ -67,7 +67,9 @@ class PersonalAdmin(admin.ModelAdmin):
 
 @admin.register(SubEstacion)
 class SubEstacionAdmin(admin.ModelAdmin):
-    list_display = ('codigo', 'nombre')
+    list_display = ('codigo', 'nombre', 'tipo', 'seccion_regional')
+    list_filter = ('tipo', 'seccion_regional')
+    list_select_related = ('seccion_regional',)
     search_fields = ('codigo', 'nombre')
 
 
@@ -76,7 +78,7 @@ class AlimentadorAdmin(admin.ModelAdmin):
     list_display = ('codigo', 'subestacion')
     list_filter = ('subestacion',)
     list_select_related = ('subestacion',)
-    search_fields = ('codigo',)
+    search_fields = ('codigo', 'subestacion__nombre')
 
 
 @admin.register(Sitio)

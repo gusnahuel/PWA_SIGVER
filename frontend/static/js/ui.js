@@ -2,7 +2,7 @@
  * SIGVER - Piezas de interfaz compartidas: notificaciones, paneles, menú,
  * contadores, botones segmentados y el registro de acciones de los botones.
  */
-import { escapeHtml } from './util.js?v=123';
+import { escapeHtml } from './util.js?v=127';
 
 // ==========================================
 // Acciones: data-accion="nombre" en el HTML en lugar de onclick="..."
@@ -141,6 +141,8 @@ function olvidarDialogo(el) {
 export function abrirModal(id, { alCerrar } = {}) {
     const el = document.getElementById(id);
     el.style.display = 'flex';
+    // Siempre desde arriba: si no, reabre a la altura en que quedó la vez anterior
+    el.querySelectorAll('.modal-card').forEach((card) => { card.scrollTop = 0; });
     registrarDialogo(el, { modal: true, alCerrar: alCerrar || (() => cerrarModal(id)) });
 }
 

@@ -3,6 +3,12 @@
  */
 
 // Escapa texto antes de insertarlo con innerHTML (evita XSS con datos del servidor)
+// "Encarnación (ENC)"; solo la sigla si la subestación todavía no tiene nombre cargado
+export function nombreSubestacion(p) {
+    if (!p.subestacion_codigo) return '-';
+    return p.subestacion_nombre ? `${p.subestacion_nombre} (${p.subestacion_codigo})` : p.subestacion_codigo;
+}
+
 export function escapeHtml(valor) {
     return String(valor ?? '').replace(/[&<>"']/g, (c) => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -100,4 +106,16 @@ export function nivelTermografico(delta) {
     if (delta <= 10) return 'Nivel 1';
     if (delta <= 20) return 'Nivel 2';
     return delta <= 40 ? 'Nivel 3' : 'Nivel 4';
+}
+
+// Equipos del banco: los datos viajan como JSON y cada foto aparte,
+// como foto_elemento_<clave>_<equipo|placa|control>.
+export function agregarElementos(formData, elementos) {
+    if (!elementos?.length) return;
+    formData.append('elementos', JSON.stringify(elementos.map(({ fotos, ...datos }) => datos)));
+    elementos.forEach((e) => {
+        Object.entries(e.fotos || {}).forEach(([que, foto]) => {
+            if (foto) formData.append(`foto_elemento_${e.clave}_${que}`, foto);
+        });
+    });
 }

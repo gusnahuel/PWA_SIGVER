@@ -233,7 +233,8 @@ def generar_informe_pdf(request, tipo, id):
                      'tono': TONO_ESTADO_SITIO.get(verificacion.estado_sitio, 'neutro')}
         contexto = {'tipo': 'REGULADOR', 'nombre_tipo': 'Regulador de tensión',
                     'mediciones': verificacion.mediciones_termografia.select_related('punto').order_by('fecha_hora'),
-                    'ensayos': verificacion.ensayos_pat.prefetch_related('lecturas')}
+                    'ensayos': verificacion.ensayos_pat.prefetch_related('lecturas'),
+                    'elementos': verificacion.componente.elementos.all() if verificacion.componente_id else []}
         fotos += [(f'Ensayo PAT {n}', imagen_a_base64(e.foto))
                   for n, e in enumerate(contexto['ensayos'], start=1) if e.foto]
     else:

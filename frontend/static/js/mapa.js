@@ -2,12 +2,12 @@
  * SIGVER - Mapa: capas, marcadores con clustering, filtros, tarjeta del
  * equipo (celular), popup (escritorio) y "mi ubicación".
  */
-import { estado } from './estado.js?v=123';
-import { fetchConToken } from './api.js?v=123';
-import { escapeHtml, haceCuanto } from './util.js?v=123';
-import { cerrarMenu, esEscritorio, registrarAcciones, setStatus, showToast } from './ui.js?v=123';
-import { abrirFormularioVerificacion } from './verificacion-etc.js?v=123';
-import { abrirFormularioRegulador } from './verificacion-regulador.js?v=123';
+import { estado } from './estado.js?v=127';
+import { fetchConToken } from './api.js?v=127';
+import { escapeHtml, haceCuanto, nombreSubestacion } from './util.js?v=127';
+import { cerrarMenu, esEscritorio, registrarAcciones, setStatus, showToast } from './ui.js?v=127';
+import { abrirFormularioVerificacion } from './verificacion-etc.js?v=127';
+import { abrirFormularioRegulador } from './verificacion-regulador.js?v=127';
 
 const API_INVENTARIO = '/api/inventario';
 const CENTRO_PARAGUAY = [-27.16, -56.24];
@@ -217,9 +217,11 @@ function htmlPopupEscritorio(f) {
     const p = f.properties;
     const esReg = p.tipo === 'REGULADOR';
     const filas = esReg
-        ? [['fa-barcode', 'Código', p.cod_sitio], ['fa-tower-broadcast', 'Alimentador', p.alimentador_codigo],
+        ? [['fa-barcode', 'Código', p.cod_sitio], ['fa-industry', 'Estación', nombreSubestacion(p)],
+           ['fa-tower-broadcast', 'Alimentador', p.alimentador_codigo],
            ['fa-circle-info', 'Estado', p.estado_general || 'Sin dato']]
-        : [['fa-tower-broadcast', 'Alimentador', p.alimentador_codigo], ['fa-circle-info', 'Estado', p.estado_seccionador],
+        : [['fa-industry', 'Estación', nombreSubestacion(p)], ['fa-tower-broadcast', 'Alimentador', p.alimentador_codigo],
+           ['fa-circle-info', 'Estado', p.estado_seccionador],
            ['fa-calendar-check', 'Última verif.', haceCuanto(p.fecha_ultima_verificacion)]];
     return `
         <div class="modern-popup">
@@ -283,6 +285,7 @@ export function mostrarTarjetaEquipo(f) {
             <div style="flex: 1; min-width: 0;">
                 <div class="tarjeta-tipo">${esReg ? 'Regulador' : 'Equipo telecomandado'}</div>
                 <div class="tarjeta-nombre">${esReg ? escapeHtml(p.id_sitio) : 'ETC ' + escapeHtml(p.nro_equipo)}</div>
+                <div class="tarjeta-estacion"><i class="fa-solid fa-industry" aria-hidden="true"></i> ${escapeHtml(nombreSubestacion(p))}</div>
             </div>
             ${chip}
             <button type="button" class="icon-action tarjeta-cerrar" data-accion="cerrar-tarjeta" aria-label="Cerrar"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>

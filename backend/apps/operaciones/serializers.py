@@ -10,7 +10,7 @@ from django.utils import timezone
 from rest_framework import serializers
 from rest_framework_gis.serializers import GeometryField
 
-from apps.inventario.models import EquipoETC, Personal, Sitio
+from apps.inventario.models import ElementoEquipo, EquipoETC, Personal, Sitio
 from . import estado_red, geo, reclamos
 from .models import (
     EnsayoPAT, HistorialReclamo, LecturaPAT, MedicionTermografia, PuntoInspeccionTermografia,
@@ -244,13 +244,40 @@ class ReclamoSerializer(serializers.ModelSerializer):
         return attrs
 
 
+def imagen_subida(archivo, descripcion):
+    """Valida que el archivo subido sea una imagen (las fotos que viajan fuera del JSON)."""
+    try:
+        return serializers.ImageField().to_internal_value(archivo)
+    except (serializers.ValidationError, DjangoValidationError):
+        raise serializers.ValidationError({'fotos': f'La foto {descripcion} no es una imagen válida.'})
+
+
+class ElementoEnVerificacionSerializer(serializers.Serializer):
+    """
+    Datos de placa de una unidad del banco, cargados durante la verificación.
+    `id`: lo genera el celular; si la unidad ya existe se corrige, si no se crea
+    con ese id (así un reenvío desde la cola no la duplica).
+    `clave`: identifica sus fotos, que llegan aparte como foto_elemento_<clave>_<equipo|placa|control>.
+    """
+    id = serializers.UUIDField()
+    clave = serializers.RegexField(r'^[A-Za-z0-9_-]{1,60}$')
+    identificador_elemento = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    marca = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    modelo = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    numero_serie = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    estado_elemento = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    observaciones = serializers.CharField(required=False, allow_blank=True)
+
+
 class VerificacionSerializer(ResponsableDesdeUsuarioMixin, DatosDeCampoMixin, serializers.ModelSerializer):
     sitio = serializers.PrimaryKeyRelatedField(queryset=Sitio.objects.all(), required=False)
     responsable = ResponsableField()
     mediciones_termografia = MedicionTermografiaSerializer(many=True, required=False)
     ensayos_pat = EnsayoPATSerializer(many=True, required=False)
+    elementos = ElementoEnVerificacionSerializer(many=True, required=False, write_only=True)
 
-    CAMPOS_ANIDADOS = ('mediciones_termografia', 'ensayos_pat')
+    CAMPOS_ANIDADOS = ('mediciones_termografia', 'ensayos_pat', 'elementos')
+    FOTOS_ELEMENTO = ('equipo', 'placa', 'control')
 
     class Meta:
         model = Verificacion
@@ -288,15 +315,42 @@ class VerificacionSerializer(ResponsableDesdeUsuarioMixin, DatosDeCampoMixin, se
             attrs['sitio'] = componente.sitio
         self._validar_fecha(attrs)
         self._resolver_gps(attrs)
+        self._validar_elementos(attrs)
         if attrs.get('estado_sitio') in self.ESTADOS_CON_RECLAMO:
             self._exigir_reclamo(attrs, self.ESTADOS_CON_RECLAMO[attrs['estado_sitio']])
         self._normalizar_reclamo(attrs)
         return self._resolver_responsable(attrs)
 
+    def _validar_elementos(self, attrs):
+        """Solo se cargan unidades del regulador que se está verificando."""
+        ids = {e['id'] for e in attrs.get('elementos') or []}
+        if not ids:
+            return
+        componente = attrs.get('componente')
+        if componente is None:
+            raise serializers.ValidationError({'elementos': 'Los equipos del banco necesitan el regulador.'})
+        if ElementoEquipo.objects.filter(id__in=ids).exclude(componente=componente).exists():
+            raise serializers.ValidationError({'elementos': 'Hay una unidad que no pertenece a este regulador.'})
+
+    def _guardar_elementos(self, componente, elementos_data):
+        archivos = self.context['request'].FILES
+        for numero, datos in enumerate(elementos_data, start=1):
+            datos = dict(datos)
+            pk, clave = datos.pop('id'), datos.pop('clave')
+            for que in self.FOTOS_ELEMENTO:
+                archivo = archivos.get(f'foto_elemento_{clave}_{que}')
+                if archivo:
+                    datos[f'foto_{que}'] = imagen_subida(archivo, f'de la unidad {numero} ({que})')
+            elemento = componente.elementos.filter(pk=pk).first() or ElementoEquipo(pk=pk, componente=componente)
+            for campo, valor in datos.items():
+                setattr(elemento, campo, valor)
+            elemento.save()
+
     @transaction.atomic
     def create(self, validated_data):
         mediciones_data = validated_data.pop('mediciones_termografia', [])
         ensayos_data = validated_data.pop('ensayos_pat', [])
+        elementos_data = validated_data.pop('elementos', [])
         obligatorio = validated_data.pop('_reclamo_obligatorio', None)
 
         verificacion = super().create(validated_data)
@@ -316,11 +370,7 @@ class VerificacionSerializer(ResponsableDesdeUsuarioMixin, DatosDeCampoMixin, se
             # La foto de cada ensayo llega aparte (el ensayo viaja como JSON): foto_pat_<id_ensayo>
             foto = archivos.get(f"foto_pat_{ensayo_data['id_ensayo']}")
             if foto:
-                try:
-                    ensayo_data['foto'] = serializers.ImageField().to_internal_value(foto)
-                except (serializers.ValidationError, DjangoValidationError):
-                    raise serializers.ValidationError(
-                        {'ensayos_pat': 'La foto del ensayo PAT no es una imagen válida.'})
+                ensayo_data['foto'] = imagen_subida(foto, 'del ensayo PAT')
             ensayo = EnsayoPAT.objects.create(
                 verificacion=verificacion,
                 componente=verificacion.componente,
@@ -329,6 +379,9 @@ class VerificacionSerializer(ResponsableDesdeUsuarioMixin, DatosDeCampoMixin, se
             LecturaPAT.objects.bulk_create(
                 LecturaPAT(ensayo=ensayo, **lectura) for lectura in lecturas_data
             )
+
+        if elementos_data and verificacion.componente_id:
+            self._guardar_elementos(verificacion.componente, elementos_data)
 
         if verificacion.requiere_reclamo:
             reclamos.registrar_falla(self.context['request'].user, verificacion)

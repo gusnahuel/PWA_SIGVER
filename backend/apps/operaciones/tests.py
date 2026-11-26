@@ -17,7 +17,8 @@ from PIL import Image
 from rest_framework.test import APIClient
 
 from apps.inventario.models import (
-    Agencia, Alimentador, Componente, EquipoETC, Personal, SeccionRegional, SubEstacion, Sitio,
+    Agencia, Alimentador, Componente, ElementoEquipo, EquipoETC, Personal, SeccionRegional, SubEstacion,
+    Sitio,
 )
 from apps.usuarios.models import Usuario
 from . import reclamos
@@ -1124,3 +1125,77 @@ class EstadoReguladorTests(BaseSigverTest):
         self.enviar(timezone.now())   # app vieja: no manda estos campos
         self.componente.refresh_from_db()
         self.assertEqual(self.componente.estado_control, 'OK')
+
+
+class EquiposDelBancoTests(BaseSigverTest):
+    """Datos de placa de cada unidad del banco, cargados con la verificación del regulador."""
+    url = '/api/operaciones/verificaciones/'
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._media = tempfile.mkdtemp()
+        cls._override = override_settings(MEDIA_ROOT=cls._media)
+        cls._override.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._override.disable()
+        shutil.rmtree(cls._media, ignore_errors=True)
+        super().tearDownClass()
+
+    def enviar(self, elementos, datos=None, **archivos):
+        datos = datos or self.datos_regulador(elementos=json.dumps(elementos), **archivos)
+        return self.cliente(self.tecnico).post(self.url, datos, format='multipart'), datos
+
+    def test_crea_unidades_con_fotos(self):
+        uid = str(uuid.uuid4())
+        res, _ = self.enviar(
+            [{'id': uid, 'clave': uid, 'identificador_elemento': 'Unidad 1', 'marca': 'TOSHIBA',
+              'modelo': 'TIPO_B', 'numero_serie': 'E09341', 'estado_elemento': 'Operativo'}],
+            **{f'foto_elemento_{uid}_placa': imagen_de_prueba(), f'foto_elemento_{uid}_equipo': imagen_de_prueba()})
+        self.assertEqual(res.status_code, 201, res.data)
+        e = ElementoEquipo.objects.get(pk=uid)
+        self.assertEqual((e.componente, e.marca, e.numero_serie), (self.componente, 'TOSHIBA', 'E09341'))
+        self.assertTrue(e.foto_placa and e.foto_equipo)
+        self.assertFalse(e.foto_control)
+
+    def test_corrige_una_unidad_sin_borrar_sus_fotos(self):
+        e = ElementoEquipo.objects.create(componente=self.componente, marca='COOPER', numero_serie='X1',
+                                          foto_placa=imagen_de_prueba())
+        res, _ = self.enviar([{'id': str(e.pk), 'clave': 'a1', 'marca': 'COOPER', 'numero_serie': 'X12'}])
+        self.assertEqual(res.status_code, 201, res.data)
+        e.refresh_from_db()
+        self.assertEqual(e.numero_serie, 'X12')
+        self.assertTrue(e.foto_placa)
+        self.assertEqual(ElementoEquipo.objects.count(), 1)
+
+    def test_reenvio_desde_la_cola_no_duplica(self):
+        uid = str(uuid.uuid4())
+        unidad = [{'id': uid, 'clave': 'u1', 'marca': 'TOSHIBA'}]
+        res, datos = self.enviar(unidad)
+        self.assertEqual(res.status_code, 201, res.data)
+        res, _ = self.enviar(unidad, datos=datos)   # mismo client_uuid
+        self.assertEqual(res.status_code, 200)
+        # y una verificación nueva que vuelve a mandar la misma unidad la corrige, no la duplica
+        res, _ = self.enviar([{'id': uid, 'clave': 'u1', 'marca': 'TOSHIBA', 'modelo': 'TIPO_B'}])
+        self.assertEqual(res.status_code, 201, res.data)
+        self.assertEqual(ElementoEquipo.objects.filter(pk=uid).values_list('modelo', flat=True).get(), 'TIPO_B')
+        self.assertEqual(ElementoEquipo.objects.count(), 1)
+
+    def test_no_toca_unidades_de_otro_regulador(self):
+        otro_sitio = Sitio.objects.create(id_sitio='SIT-OTRO', alimentador=self.sitio.alimentador)
+        otro = Componente.objects.create(id_componente='COMP-OTRO', sitio=otro_sitio)
+        ajena = ElementoEquipo.objects.create(componente=otro, marca='COOPER')
+        res, _ = self.enviar([{'id': str(ajena.pk), 'clave': 'x', 'marca': 'HACKEADO'}])
+        self.assertEqual(res.status_code, 400)
+        ajena.refresh_from_db()
+        self.assertEqual(ajena.marca, 'COOPER')
+
+    def test_los_sitios_muestran_sus_unidades(self):
+        ElementoEquipo.objects.create(componente=self.componente, marca='TOSHIBA', foto_placa=imagen_de_prueba())
+        res = self.cliente(self.tecnico).get('/api/inventario/sitios/')
+        self.assertEqual(res.status_code, 200)
+        sitio = next(f for f in res.data['features'] if f['id'] == str(self.sitio.pk) or
+                     f['properties'].get('id_sitio') == self.sitio.id_sitio)
+        self.assertEqual([(e['marca'], e['fotos']) for e in sitio['properties']['elementos']], [('TOSHIBA', 1)])

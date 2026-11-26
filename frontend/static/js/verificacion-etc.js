@@ -2,16 +2,16 @@
  * SIGVER - Verificación de ETC (equipo telecomandado): formulario simple con
  * foto, fallas y reclamo opcional. Si no hay señal se guarda en la cola offline.
  */
-import { guardarVerificacionOffline } from './db.js?v=123';
-import { datosGps, seguirUbicacion, sugerirCoincidencia } from './gps.js?v=123';
-import { estado } from './estado.js?v=123';
-import { fetchConToken, fetchConTimeout, esErrorDeRed, describirErrorServidor } from './api.js?v=123';
-import { comprimirImagen, generarIdLocal, generarUUID } from './util.js?v=123';
+import { guardarVerificacionOffline } from './db.js?v=127';
+import { datosGps, seguirUbicacion, sugerirCoincidencia } from './gps.js?v=127';
+import { estado } from './estado.js?v=127';
+import { fetchConToken, fetchConTimeout, esErrorDeRed, describirErrorServidor } from './api.js?v=127';
+import { comprimirImagen, generarIdLocal, generarUUID } from './util.js?v=127';
 import {
     abrirPanel, avisarSoloCelular, cerrarPanel, cerrarPopupsMapa, esEscritorio,
     repintarSegmentados, showToast,
-} from './ui.js?v=123';
-import { actualizarContadorPendientes } from './sync.js?v=123';
+} from './ui.js?v=127';
+import { actualizarContadorPendientes } from './sync.js?v=127';
 
 let equipoSeleccionadoId = null;
 let posicionActual = () => null;   // GPS del formulario abierto (ver gps.js)

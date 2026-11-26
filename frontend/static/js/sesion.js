@@ -1,10 +1,10 @@
 /**
  * SIGVER - Sesión: login, datos del usuario en el menú y cierre de sesión.
  */
-import { estado } from './estado.js?v=123';
-import { iniciales } from './util.js?v=123';
-import { abrirModal, cerrarModal, registrarAcciones, showToast } from './ui.js?v=123';
-import { obtenerPendientesPropios } from './sync.js?v=123';
+import { estado } from './estado.js?v=127';
+import { iniciales } from './util.js?v=127';
+import { abrirModal, cerrarModal, registrarAcciones, showToast } from './ui.js?v=127';
+import { obtenerPendientesPropios } from './sync.js?v=127';
 
 const ROLES_GESTION = ['supervisor_zona', 'admin_eam'];
 const NOMBRE_ROL = {

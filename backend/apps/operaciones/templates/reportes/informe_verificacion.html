@@ -234,7 +234,7 @@
             {% with e=verificacion.equipo_etc %}
             <div class="dato"><span class="etq">N.º de equipo</span><span class="val">{{ e.nro_equipo }}</span></div>
             <div class="dato"><span class="etq">Alimentador</span><span class="val">{{ e.alimentador.codigo|default:"—" }}</span></div>
-            <div class="dato"><span class="etq">Subestación</span><span class="val">{{ e.alimentador.subestacion.codigo|default:"—" }}</span></div>
+            <div class="dato"><span class="etq">Estación</span><span class="val">{{ e.alimentador.subestacion|default:"—" }}</span></div>
             <div class="dato"><span class="etq">Seccionador</span><span class="val">{{ e.get_estado_seccionador_display }}</span></div>
             <div class="dato"><span class="etq">Cuchillas laterales</span><span class="val">{{ e.get_cuchillas_laterales_display|default:"—" }}</span></div>
             <div class="dato"><span class="etq">Coordenadas del equipo</span>
@@ -244,7 +244,7 @@
             {% with s=verificacion.sitio %}
             <div class="dato"><span class="etq">Sitio</span><span class="val">{{ s.id_sitio }}{% if s.cod_sitio %} · {{ s.cod_sitio }}{% endif %}</span></div>
             <div class="dato"><span class="etq">Componente</span><span class="val">{{ verificacion.componente.id_componente }}</span></div>
-            <div class="dato"><span class="etq">Alimentador</span><span class="val">{{ s.alimentador.codigo }}{% if s.alimentador.subestacion %} · {{ s.alimentador.subestacion.codigo }}{% endif %}</span></div>
+            <div class="dato"><span class="etq">Alimentador</span><span class="val">{{ s.alimentador.codigo }}{% if s.alimentador.subestacion %} · {{ s.alimentador.subestacion }}{% endif %}</span></div>
             <div class="dato"><span class="etq">Banco (inventario)</span><span class="val">{{ s.get_configuracion_banco_display|default:"—" }}</span></div>
             <div class="dato"><span class="etq">Capacidad</span><span class="val">{% if s.capacidad_a %}{{ s.capacidad_a }} A{% else %}—{% endif %}</span></div>
             <div class="dato"><span class="etq">Coordenadas del sitio</span>
@@ -310,6 +310,23 @@
         <p class="texto-libre">{{ verificacion.observaciones }}</p>
     {% else %}
         <p class="nota">Sin observaciones registradas.</p>
+    {% endif %}
+
+    {% if elementos %}
+    <h3>Equipos del banco</h3>
+    <table>
+        <thead><tr><th>Unidad</th><th>Marca</th><th>Modelo</th><th>N.º de serie</th><th>Estado</th></tr></thead>
+        <tbody>
+        {% for e in elementos %}
+        <tr>
+            <td><b>{{ e.identificador_elemento|default:forloop.counter }}</b>{% if e.observaciones %}<br><i>{{ e.observaciones }}</i>{% endif %}</td>
+            <td>{{ e.marca|default:"—" }}</td><td>{{ e.modelo|default:"—" }}</td>
+            <td>{{ e.numero_serie|default:"—" }}</td><td>{{ e.estado_elemento|default:"—" }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <p class="nota">Datos de placa actuales del regulador.</p>
     {% endif %}
 </section>
 

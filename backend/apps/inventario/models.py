@@ -90,9 +90,21 @@ class Personal(models.Model):
 # =====================================================
 
 class SubEstacion(models.Model):
-    """Subestación eléctrica (BRO, ENC, NAT, etc.)."""
+    """Estación o subestación eléctrica (BRO, ENC, NAT, etc.)."""
+    TIPO = [
+        ('ESTACION', 'Estación'),
+        ('SUBESTACION', 'Subestación'),
+    ]
     codigo = models.CharField(max_length=20, unique=True)
     nombre = models.CharField(max_length=100, blank=True)
+    tipo = models.CharField(max_length=20, choices=TIPO, blank=True)
+    seccion_regional = models.ForeignKey(
+        SeccionRegional,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='subestaciones',
+        help_text='Según el departamento: Itapúa → Encarnación, Misiones → Misiones, Ñeembucú → Pilar.',
+    )
 
     class Meta:
         verbose_name = 'Subestación'
@@ -100,7 +112,7 @@ class SubEstacion(models.Model):
         ordering = ['codigo']
 
     def __str__(self):
-        return self.codigo
+        return f"{self.nombre} ({self.codigo})" if self.nombre else self.codigo
 
 
 class Alimentador(models.Model):
@@ -241,6 +253,7 @@ class ElementoEquipo(models.Model):
     class Meta:
         verbose_name = 'Elemento de Equipo'
         verbose_name_plural = 'Elementos de Equipo'
+        ordering = ['identificador_elemento', 'id']
 
     def __str__(self):
         return f"{self.marca} {self.modelo} ({self.numero_serie})"

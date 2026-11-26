@@ -1,27 +1,30 @@
 /**
  * SIGVER - Búsqueda de equipos (ETC y reguladores) por código, alimentador o subestación.
  */
-import { estado } from './estado.js?v=123';
-import { escapeHtml } from './util.js?v=123';
-import { abrirPanel, cerrarMenu, esEscritorio, registrarAcciones } from './ui.js?v=123';
-import { cerrarTarjetaEquipo } from './mapa.js?v=123';
+import { estado } from './estado.js?v=127';
+import { escapeHtml, nombreSubestacion } from './util.js?v=127';
+import { abrirPanel, cerrarMenu, esEscritorio, registrarAcciones } from './ui.js?v=127';
+import { cerrarTarjetaEquipo } from './mapa.js?v=127';
 
 const MIN_LETRAS = 2;
 const MAX_RESULTADOS = 50; // más que esto traba los celulares de gama baja
 
 function buscar(query, filtro) {
-    const coincide = (...valores) => valores.some((v) => (v || '').toLowerCase().includes(query));
+    // Sin tildes: "encarnacion" encuentra "Encarnación"
+    const normalizar = (v) => (v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const q = normalizar(query);
+    const coincide = (...valores) => valores.some((v) => normalizar(v).includes(q));
     const resultados = [];
 
     if (filtro === 'todos' || filtro === 'etc') {
         estado.equipos.forEach((f) => {
             if (!f.geometry) return;
             const p = f.properties;
-            if (coincide(p.nro_equipo, p.alimentador_codigo, p.subestacion_codigo)) {
+            if (coincide(p.nro_equipo, p.alimentador_codigo, p.subestacion_codigo, p.subestacion_nombre)) {
                 resultados.push({
                     tipo: 'ETC',
                     titulo: `ETC ${p.nro_equipo}`,
-                    subtitulo: `Subestación ${p.subestacion_codigo} | Alimentador ${p.alimentador_codigo}`,
+                    subtitulo: `${nombreSubestacion(p)} | Alimentador ${p.alimentador_codigo}`,
                     coords: f.geometry.coordinates
                 });
             }
@@ -32,11 +35,11 @@ function buscar(query, filtro) {
         estado.sitios.forEach((f) => {
             if (!f.geometry) return;
             const p = f.properties;
-            if (coincide(p.id_sitio, p.cod_sitio, p.alimentador_codigo, p.subestacion_codigo)) {
+            if (coincide(p.id_sitio, p.cod_sitio, p.alimentador_codigo, p.subestacion_codigo, p.subestacion_nombre)) {
                 resultados.push({
                     tipo: 'Regulador',
                     titulo: `Regulador ${p.id_sitio}`,
-                    subtitulo: `${p.cod_sitio} | Subestación ${p.subestacion_codigo}`,
+                    subtitulo: `${p.cod_sitio} | ${nombreSubestacion(p)}`,
                     coords: f.geometry.coordinates
                 });
             }

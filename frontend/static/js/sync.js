@@ -2,11 +2,11 @@
  * SIGVER - Trabajo sin conexión: cola de verificaciones (IndexedDB), contadores
  * de pendientes, estado de la conexión y sincronización automática.
  */
-import { guardarVerificacionOffline, obtenerPendientes, eliminarDeOutbox } from './db.js?v=123';
-import { fetchConTimeout, describirErrorServidor } from './api.js?v=123';
-import { ponerBadge, registrarAcciones, showToast } from './ui.js?v=123';
-import { estado } from './estado.js?v=123';
-import { agregarEnsayosPat } from './util.js?v=123';
+import { guardarVerificacionOffline, obtenerPendientes, eliminarDeOutbox } from './db.js?v=127';
+import { fetchConTimeout, describirErrorServidor } from './api.js?v=127';
+import { ponerBadge, registrarAcciones, showToast } from './ui.js?v=127';
+import { estado } from './estado.js?v=127';
+import { agregarElementos, agregarEnsayosPat } from './util.js?v=127';
 
 let isSyncing = false;
 let cantidadPendientes = 0;
@@ -72,7 +72,7 @@ function armarFormData(payload) {
     const formData = new FormData();
     if (payload.tipo === 'regulador') {
         const excluidos = ['tipo', 'foto_frontal', 'foto_entorno', 'foto_control_unico',
-            'mediciones_termografia', 'ensayos_pat', 'estado_sync', 'timestamp_local',
+            'mediciones_termografia', 'ensayos_pat', 'elementos', 'estado_sync', 'timestamp_local',
             'ultimo_error', 'responsable', 'propietario'];
         for (const key in payload) {
             if (!excluidos.includes(key) && payload[key] !== null && payload[key] !== undefined) {
@@ -84,6 +84,7 @@ function armarFormData(payload) {
         if (payload.foto_control_unico) formData.append('foto_control_unico', payload.foto_control_unico);
         if (payload.mediciones_termografia) formData.append('mediciones_termografia', JSON.stringify(payload.mediciones_termografia));
         agregarEnsayosPat(formData, payload.ensayos_pat);
+        agregarElementos(formData, payload.elementos);
         return { endpoint: '/api/operaciones/verificaciones/', formData };
     }
 

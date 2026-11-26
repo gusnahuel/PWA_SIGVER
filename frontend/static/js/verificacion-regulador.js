@@ -2,21 +2,22 @@
  * SIGVER - Verificación de regulador: formulario en 4 pasos (datos y GPS,
  * fotos, mediciones, reclamo/resumen). Sin señal se guarda en la cola offline.
  */
-import { guardarVerificacionOffline } from './db.js?v=123';
-import { datosGps, seguirUbicacion, sugerirCoincidencia } from './gps.js?v=123';
-import { estado } from './estado.js?v=123';
-import { fetchConTimeout, esErrorDeRed, describirErrorServidor } from './api.js?v=123';
+import { guardarVerificacionOffline } from './db.js?v=127';
+import { datosGps, seguirUbicacion, sugerirCoincidencia } from './gps.js?v=127';
+import { estado } from './estado.js?v=127';
+import { fetchConTimeout, esErrorDeRed, describirErrorServidor } from './api.js?v=127';
 import {
-    agregarEnsayosPat, comprimirImagen, escapeHtml, generarIdLocal, generarUUID, nivelTermografico,
-} from './util.js?v=123';
+    agregarElementos, agregarEnsayosPat, comprimirImagen, escapeHtml, generarIdLocal, generarUUID, nivelTermografico,
+} from './util.js?v=127';
 import {
     abrirPanel, avisarSoloCelular, cerrarPanel, cerrarPopupsMapa, esEscritorio,
     repintarSegmentados, showToast,
-} from './ui.js?v=123';
-import { actualizarContadorPendientes } from './sync.js?v=123';
-import { obtenerEnsayosPat, obtenerTermografias, reiniciarMediciones } from './mediciones.js?v=123';
+} from './ui.js?v=127';
+import { actualizarContadorPendientes } from './sync.js?v=127';
+import { obtenerEnsayosPat, obtenerTermografias, reiniciarMediciones } from './mediciones.js?v=127';
+import { cargarElementos, elementosComoGuardados, obtenerElementosParaEnviar } from './elementos.js?v=127';
 
-const TOTAL_PASOS = 4;
+const TOTAL_PASOS = 5;
 const FOTOS_REGULADOR = ['reg-foto-frontal', 'reg-foto-entorno', 'reg-foto-control'];
 
 let componenteSeleccionadoId = null;
@@ -33,6 +34,7 @@ export function abrirFormularioRegulador(componenteId, codSitio) {
     repintarSegmentados(form);
     limpiarFotosRegulador();
     reiniciarMediciones();
+    cargarElementos(sitio);
     document.getElementById('reg-status').textContent = '';
     document.getElementById('reg-req-reclamo').checked = false;
     document.getElementById('grupo-prioridad-reg').style.display = 'none';
@@ -166,6 +168,10 @@ function actualizarResumenRegulador() {
         ['Termografía', termografias.length
             ? `${termografias.length} punto(s)${maxDelta !== null ? ` · máx. Δ ${String(maxDelta).replace('.', ',')}° (${nivelMax})` : ''}`
             : 'Sin mediciones'],
+        ['Equipos', (() => {
+            const n = obtenerElementosParaEnviar().length;
+            return n ? `${n} unidad(es) a enviar` : 'Sin cambios';
+        })()],
         ['Ensayo PAT', ensayos.length
             ? ensayos.map((e) => e.resultado.replace('_', ' ').toLowerCase()).join(', ')
             : 'Sin ensayo'],
@@ -223,6 +229,7 @@ document.getElementById('form-regulador').addEventListener('submit', async (e) =
     };
     const termografias = obtenerTermografias();
     const ensayos = obtenerEnsayosPat();
+    const elementos = obtenerElementosParaEnviar();
 
     const formData = new FormData();
     Object.entries(payloadBase).forEach(([k, v]) => formData.append(k, v));
@@ -231,6 +238,7 @@ document.getElementById('form-regulador').addEventListener('submit', async (e) =
     if (fotoControl) formData.append('foto_control_unico', fotoControl);
     if (termografias.length > 0) formData.append('mediciones_termografia', JSON.stringify(termografias));
     agregarEnsayosPat(formData, ensayos);
+    agregarElementos(formData, elementos);
 
     let guardadoExitoso = false;
     try {
@@ -260,6 +268,7 @@ document.getElementById('form-regulador').addEventListener('submit', async (e) =
                 if (fotoControl) payloadOffline.foto_control_unico = fotoControl;
                 if (termografias.length > 0) payloadOffline.mediciones_termografia = termografias;
                 if (ensayos.length > 0) payloadOffline.ensayos_pat = ensayos;
+                if (elementos.length > 0) payloadOffline.elementos = elementos;
 
                 await guardarVerificacionOffline(payloadOffline);
                 showToast('Guardado localmente. Se enviará al recuperar señal.', 'warning');
@@ -275,6 +284,9 @@ document.getElementById('form-regulador').addEventListener('submit', async (e) =
         btnGuardar.disabled = false;
         btnGuardar.textContent = 'Guardar verificación';
         if (guardadoExitoso) {
+            // El sitio recuerda las unidades enviadas: al volver a abrirlo se ven (y se corrigen) sin duplicarse
+            const sitio = estado.sitios.find((s) => s.properties.componente_id === componenteSeleccionadoId);
+            if (sitio && elementos.length) sitio.properties.elementos = elementosComoGuardados();
             reiniciarMediciones();
             setTimeout(cerrarFormulario, 2000);
         }

@@ -5,7 +5,7 @@
  * equipo (orientativo) y guarda la posición para enviarla. La distancia que
  * vale es la que calcula el servidor con esas coordenadas.
  */
-import { calcularDistanciaMetros } from './util.js?v=123';
+import { calcularDistanciaMetros } from './util.js?v=127';
 
 export const UMBRAL_EN_EL_LUGAR_M = 50;
 export const UMBRAL_CERCA_M = 300;
