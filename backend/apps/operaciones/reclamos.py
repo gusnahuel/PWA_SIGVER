@@ -264,7 +264,9 @@ def _validar_asignacion(reclamo, usuario, rol, plan, estado, ahora):
         if agencia is None and responsable.agencia is not None:
             # Sin agencia todavía: toma la del técnico asignado
             agencia = valores['agencia_responsable'] = responsable.agencia
-        elif agencia is not None and responsable.agencia_id != agencia.id and rol != 'admin_eam':
+        elif (agencia is not None and responsable.agencia_id not in (None, agencia.id)
+              and rol != 'admin_eam'):
+            # El personal del departamento (sin agencia) puede atender cualquier agencia
             otra = responsable.agencia or 'sin agencia'
             raise ReglaReclamo(f'{responsable.nombre_completo} es de otra agencia ({otra}).',
                                campo='responsable_asignado')
@@ -274,9 +276,10 @@ def _validar_asignacion(reclamo, usuario, rol, plan, estado, ahora):
         if 'agencia_responsable' in valores:
             if agencia is None:
                 raise ReglaReclamo('Elegí la agencia responsable.', campo='agencia_responsable')
-            if agencia.id not in mias:
+            if mias is not None and agencia.id not in mias:
                 raise ReglaReclamo(f'No tenés asignada la agencia {agencia}.', campo='agencia_responsable')
-        if responsable is not None and 'responsable_asignado' in valores and responsable.agencia_id not in mias:
+        if (mias is not None and responsable is not None and 'responsable_asignado' in valores
+                and responsable.agencia_id not in mias):
             raise ReglaReclamo(f'{responsable.nombre_completo} no pertenece a tus agencias.',
                                campo='responsable_asignado')
 
@@ -429,8 +432,8 @@ def preparar_nuevo(usuario, datos):
             raise ReglaReclamo(f'{responsable.nombre_completo} está dado de baja.', campo='responsable_asignado')
         if agencia is None:
             agencia = datos['agencia_responsable'] = responsable.agencia
-    if rol == 'supervisor':
-        mias = agencias_del_usuario(usuario)
+    mias = agencias_del_usuario(usuario) if rol == 'supervisor' else None
+    if mias is not None:
         if agencia is not None and agencia.id not in mias:
             raise ReglaReclamo(f'No tenés asignada la agencia {agencia}.', campo='agencia_responsable')
         if responsable is not None and responsable.agencia_id not in mias:

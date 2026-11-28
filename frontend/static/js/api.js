@@ -1,7 +1,7 @@
 /**
  * SIGVER - Llamadas al servidor: token JWT (con renovación), timeout y errores.
  */
-import { ejecutarCierreSesion } from './sesion.js?v=127';
+import { ejecutarCierreSesion } from './sesion.js?v=128';
 
 // Renovación compartida: con la rotación de tokens, cada refresh se puede usar
 // una sola vez. Si varios pedidos vencen juntos (p. ej. los 4 del arranque),

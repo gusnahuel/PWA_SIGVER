@@ -2,11 +2,11 @@
  * SIGVER - Trabajo sin conexión: cola de verificaciones (IndexedDB), contadores
  * de pendientes, estado de la conexión y sincronización automática.
  */
-import { guardarVerificacionOffline, obtenerPendientes, eliminarDeOutbox } from './db.js?v=127';
-import { fetchConTimeout, describirErrorServidor } from './api.js?v=127';
-import { ponerBadge, registrarAcciones, showToast } from './ui.js?v=127';
-import { estado } from './estado.js?v=127';
-import { agregarElementos, agregarEnsayosPat } from './util.js?v=127';
+import { guardarVerificacionOffline, obtenerPendientes, eliminarDeOutbox } from './db.js?v=128';
+import { fetchConTimeout, describirErrorServidor } from './api.js?v=128';
+import { ponerBadge, registrarAcciones, showToast } from './ui.js?v=128';
+import { estado } from './estado.js?v=128';
+import { agregarElementos, agregarEnsayosPat } from './util.js?v=128';
 
 let isSyncing = false;
 let cantidadPendientes = 0;

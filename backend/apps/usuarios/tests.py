@@ -240,3 +240,57 @@ class SeguridadLoginTests(TestCase):
         self.assertEqual(res.status_code, 200)
         res = self.client.post(reverse('token_refresh'), {'refresh': refresh}, content_type='application/json')
         self.assertEqual(res.status_code, 401)
+
+
+class CambiarClaveTests(TestCase):
+    """Cambio de contraseña desde la PWA."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.user = Usuario.objects.create_user('tec', password='Clave-segura-1', rol='tecnico_campo')
+        self.url = reverse('usuarios:cambiar_clave')
+
+    def _login(self, password='Clave-segura-1'):
+        return self.client.post(reverse('token_obtain_pair'), {'username': 'tec', 'password': password},
+                                content_type='application/json').json()
+
+    def _cambiar(self, access, actual, nueva):
+        return self.client.post(self.url, {'actual': actual, 'nueva': nueva}, content_type='application/json',
+                                HTTP_AUTHORIZATION=f'Bearer {access}')
+
+    def test_cambia_y_revoca_las_otras_sesiones(self):
+        otro_celular = self._login()
+        este = self._login()
+        res = self._cambiar(este['access'], 'Clave-segura-1', 'Transformador-77')
+        self.assertEqual(res.status_code, 200, res.json())
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password('Transformador-77'))
+        # El otro celular ya no puede renovar su sesión; este sigue con los tokens nuevos
+        renovar = lambda r: self.client.post(reverse('token_refresh'), {'refresh': r}, content_type='application/json')
+        self.assertEqual(renovar(otro_celular['refresh']).status_code, 401)
+        self.assertEqual(renovar(res.json()['refresh']).status_code, 200)
+
+    def test_rechaza_actual_incorrecta(self):
+        res = self._cambiar(self._login()['access'], 'no-es', 'Transformador-77')
+        self.assertEqual(res.status_code, 400)
+        self.assertIn('actual', res.json())
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password('Clave-segura-1'))
+
+    def test_rechaza_clave_debil_o_igual(self):
+        access = self._login()['access']
+        for nueva in ('12345678', 'corta', 'Clave-segura-1'):
+            res = self._cambiar(access, 'Clave-segura-1', nueva)
+            self.assertEqual(res.status_code, 400, nueva)
+            self.assertIn('nueva', res.json())
+
+    def test_cuenta_para_el_bloqueo(self):
+        access = self._login()['access']
+        for _ in range(5):
+            self._cambiar(access, 'mal', 'Transformador-77')
+        self.assertEqual(self._cambiar(access, 'Clave-segura-1', 'Transformador-77').status_code, 429)
+
+    def test_sin_sesion_no(self):
+        res = self.client.post(self.url, {'actual': 'x', 'nueva': 'y'}, content_type='application/json')
+        self.assertEqual(res.status_code, 401)

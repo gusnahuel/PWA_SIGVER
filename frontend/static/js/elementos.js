@@ -3,8 +3,8 @@
  * unidad (marca, modelo, serie, estado y fotos). Muestra lo ya cargado en el
  * servidor y envía con la verificación solo lo nuevo o corregido.
  */
-import { comprimirImagen, escapeHtml, generarUUID } from './util.js?v=127';
-import { abrirModal, cerrarModal, registrarAcciones } from './ui.js?v=127';
+import { comprimirImagen, escapeHtml, generarUUID } from './util.js?v=128';
+import { abrirModal, cerrarModal, registrarAcciones } from './ui.js?v=128';
 
 const FOTOS = ['equipo', 'placa', 'control'];
 const CAMPOS = {

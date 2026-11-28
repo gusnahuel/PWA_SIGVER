@@ -2,7 +2,7 @@
  * SIGVER - Service Worker
  * Estrategias de cacheo diferenciadas para PWA offline-first.
  */
-const CACHE_NAME = 'sigver-v127';
+const CACHE_NAME = 'sigver-v128';
 const TILE_CACHE = 'sigver-tiles-v102'; // no cambiar: borraría los mapas offline
 
 // Recursos que se cachean al instalar (app shell): con esto la app arranca
@@ -11,26 +11,26 @@ const APP_SHELL = [
     '/',
     // Con ?v=: nginx sirve /static/ como "immutable", hay que cambiar la URL en cada versión
     // (lo hace scripts/version.sh)
-    '/static/css/tokens.css?v=127',
-    '/static/css/style.css?v=127',
-    '/static/js/app.js?v=127',
-    '/static/js/db.js?v=127',
+    '/static/css/tokens.css?v=128',
+    '/static/css/style.css?v=128',
+    '/static/js/app.js?v=128',
+    '/static/js/db.js?v=128',
     // Módulos que importa app.js: si falta uno, la app no arranca sin conexión
-    '/static/js/estado.js?v=127',
-    '/static/js/util.js?v=127',
-    '/static/js/api.js?v=127',
-    '/static/js/ui.js?v=127',
-    '/static/js/sesion.js?v=127',
-    '/static/js/mapa.js?v=127',
-    '/static/js/busqueda.js?v=127',
-    '/static/js/gps.js?v=127',
-    '/static/js/verificacion-etc.js?v=127',
-    '/static/js/verificacion-regulador.js?v=127',
-    '/static/js/mediciones.js?v=127',
-    '/static/js/elementos.js?v=127',
-    '/static/js/reclamos.js?v=127',
-    '/static/js/sync.js?v=127',
-    '/static/js/actualizaciones.js?v=127',
+    '/static/js/estado.js?v=128',
+    '/static/js/util.js?v=128',
+    '/static/js/api.js?v=128',
+    '/static/js/ui.js?v=128',
+    '/static/js/sesion.js?v=128',
+    '/static/js/mapa.js?v=128',
+    '/static/js/busqueda.js?v=128',
+    '/static/js/gps.js?v=128',
+    '/static/js/verificacion-etc.js?v=128',
+    '/static/js/verificacion-regulador.js?v=128',
+    '/static/js/mediciones.js?v=128',
+    '/static/js/elementos.js?v=128',
+    '/static/js/reclamos.js?v=128',
+    '/static/js/sync.js?v=128',
+    '/static/js/actualizaciones.js?v=128',
     '/manifest.json',
     '/static/icons/icon.svg?v=2',
     // Librerías propias (antes venían de CDNs y no estaban garantizadas offline)

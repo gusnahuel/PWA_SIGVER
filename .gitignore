@@ -89,3 +89,8 @@ desktop.ini
 # Certificados HTTPS (claves privadas: nunca al repositorio)
 # ==========================================
 nginx/certs/
+
+# ==========================================
+# Copias de seguridad (datos reales: nunca al repositorio)
+# ==========================================
+backups/

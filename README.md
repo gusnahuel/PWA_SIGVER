@@ -98,6 +98,33 @@ Mientras está activo, en esta PC también se entra por la dirección de ngrok
 scripts/version.sh   # sube el ?v= en todos los archivos y corre collectstatic
 ```
 
+### Copia de seguridad
+
+`scripts/backup.sh` guarda en `backups/` la base de datos (`sigver_db_<fecha>.dump`) y
+las fotos (`sigver_media_<fecha>.tar.gz`). Comprueba que la copia de la base se pueda leer
+y borra las de más de 14 días. La carpeta `backups/` está en `.gitignore`.
+
+**Automática, todos los días** (`crontab -e` y agregar la línea; la PC tiene que estar
+prendida a esa hora):
+
+```
+30 12 * * * /ruta/a/sigver/scripts/backup.sh >> /ruta/a/sigver/backups/backup.log 2>&1
+```
+
+Una copia en el mismo disco no sirve si el disco se rompe: copiar `backups/` de vez en
+cuando a un disco externo o a la nube, o guardarla ahí directamente con
+`BACKUP_DIR=/media/disco/sigver scripts/backup.sh`.
+
+**Restaurar** (reemplaza los datos actuales: hacer antes una copia de lo que haya):
+
+```bash
+docker compose stop web
+docker compose exec -T db sh -c 'dropdb -U "$POSTGRES_USER" "$POSTGRES_DB" && createdb -U "$POSTGRES_USER" "$POSTGRES_DB"'
+docker compose exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner' < backups/sigver_db_<fecha>.dump
+docker compose start web
+docker compose exec -T web tar xzf - -C /app < backups/sigver_media_<fecha>.tar.gz
+```
+
 Documentación y decisiones arquitectónicas
 
 text

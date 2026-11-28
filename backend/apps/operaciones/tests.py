@@ -1199,3 +1199,43 @@ class EquiposDelBancoTests(BaseSigverTest):
         sitio = next(f for f in res.data['features'] if f['id'] == str(self.sitio.pk) or
                      f['properties'].get('id_sitio') == self.sitio.id_sitio)
         self.assertEqual([(e['marca'], e['fotos']) for e in sitio['properties']['elementos']], [('TOSHIBA', 1)])
+
+
+class JefeDeDepartamentoTests(BaseSigverTest):
+    """Supervisor sin agencias asignadas: opera las tres regionales (jefes del departamento)."""
+    url = '/api/operaciones/reclamos/'
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.jefe = Usuario.objects.create_user('jefe', password='x', rol='supervisor_zona')
+        # Personal del departamento: sin agencia
+        cls.personal_depto = Personal.objects.create(id_personal='PER-D1', nombre_completo='Funcionario Regional')
+        for i, agencia in enumerate((cls.agencia, cls.otra_agencia, None)):
+            Reclamo.objects.create(id_reclamo=f'REC-J{i}', descripcion='x', agencia_responsable=agencia)
+
+    def test_ve_los_reclamos_de_todas_las_agencias(self):
+        res = self.cliente(self.jefe).get(self.url)
+        self.assertEqual({r['id_reclamo'] for r in res.data['results']}, {'REC-J0', 'REC-J1', 'REC-J2'})
+
+    def test_ve_las_verificaciones_de_todos(self):
+        for tecnico in (self.tecnico, self.otro_tecnico):
+            res = self.cliente(tecnico).post('/api/operaciones/verificaciones/', self.datos_regulador(), format='multipart')
+            self.assertEqual(res.status_code, 201, res.data)
+        res = self.cliente(self.jefe).get('/api/operaciones/verificaciones/')
+        self.assertEqual(res.data['count'], 2)
+
+    def test_asigna_cualquier_agencia_y_personal_del_departamento(self):
+        reclamo = Reclamo.objects.get(id_reclamo='REC-J1')
+        res = self.cliente(self.jefe).patch(f'{self.url}{reclamo.id}/', {
+            'agencia_responsable': str(self.agencia.id),
+            'responsable_asignado': str(self.personal_depto.id),
+        }, format='json')
+        self.assertEqual(res.status_code, 200, res.data)
+        reclamo.refresh_from_db()
+        self.assertEqual((reclamo.agencia_responsable, reclamo.responsable_asignado, reclamo.estado),
+                         (self.agencia, self.personal_depto, 'ASIGNADO'))
+
+    def test_un_supervisor_con_agencias_sigue_limitado(self):
+        res = self.cliente(self.supervisor).get(self.url)
+        self.assertEqual({r['id_reclamo'] for r in res.data['results']}, {'REC-J0', 'REC-J2'})

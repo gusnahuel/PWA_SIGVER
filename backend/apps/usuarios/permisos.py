@@ -19,12 +19,16 @@ class SoloLecturaParaConsulta(BasePermission):
 
 
 def agencias_del_usuario(user):
-    """IDs de agencias que el usuario puede ver (asignadas + la de su ficha de Personal)."""
+    """
+    IDs de agencias que el usuario puede ver (asignadas + la de su ficha de Personal),
+    o None si no tiene ninguna: opera todo el departamento. Es el caso de los jefes
+    del Departamento de Operación de Distribución, que atienden las tres regionales.
+    """
     ids = set(user.agencias_asignadas.values_list('id', flat=True))
     personal = getattr(user, 'personal', None)
     if personal is not None and personal.agencia_id:
         ids.add(personal.agencia_id)
-    return ids
+    return ids or None
 
 
 def filtrar_reclamos_por_rol(user, qs):
@@ -32,15 +36,16 @@ def filtrar_reclamos_por_rol(user, qs):
     - admin_eam / superusuario / consulta: todos los reclamos.
     - supervisor_zona: los de sus agencias y los que todavía no tienen agencia
       (bandeja de entrada: el supervisor les asigna la que corresponda).
+      Sin agencias asignadas: todos (opera todo el departamento).
     - tecnico_campo: solo los asignados a él.
     """
     if user.es_admin_eam or user.rol == 'consulta':
         return qs
     if user.es_supervisor:
-        return qs.filter(
-            Q(agencia_responsable_id__in=agencias_del_usuario(user))
-            | Q(agencia_responsable__isnull=True)
-        )
+        mias = agencias_del_usuario(user)
+        if mias is None:
+            return qs
+        return qs.filter(Q(agencia_responsable_id__in=mias) | Q(agencia_responsable__isnull=True))
 
     filtro = Q(pk__in=[])
     personal = getattr(user, 'personal', None)
@@ -59,8 +64,11 @@ def filtrar_verificaciones_por_rol(user, qs, prefijo=''):
     if user.es_admin_eam or user.rol == 'consulta':
         return qs
     if user.es_supervisor:
+        mias = agencias_del_usuario(user)
+        if mias is None:
+            return qs
         return qs.filter(
-            Q(**{f'{prefijo}agencia_responsable_id__in': agencias_del_usuario(user)})
+            Q(**{f'{prefijo}agencia_responsable_id__in': mias})
             | Q(**{f'{prefijo}agencia_responsable__isnull': True})
         )
     personal = getattr(user, 'personal', None)
@@ -74,7 +82,10 @@ def filtrar_personal_por_rol(user, qs):
     if user.es_admin_eam or user.rol == 'consulta':
         return qs
     if user.es_supervisor:
-        return qs.filter(Q(agencia_id__in=agencias_del_usuario(user)) | Q(agencia__isnull=True))
+        mias = agencias_del_usuario(user)
+        if mias is None:
+            return qs
+        return qs.filter(Q(agencia_id__in=mias) | Q(agencia__isnull=True))
     personal = getattr(user, 'personal', None)
     return qs.filter(pk=personal.pk) if personal is not None else qs.none()
 

@@ -5,7 +5,7 @@
  * Así nunca conviven el código viejo de la pestaña con el service worker nuevo,
  * y no se recarga la app con un formulario a medio cargar.
  */
-import { showToast } from './ui.js?v=127';
+import { showToast } from './ui.js?v=128';
 
 let swEnEspera = null;
 let recargandoPorActualizacion = false;

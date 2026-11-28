@@ -21,17 +21,10 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from openpyxl import load_workbook
 
-from apps.inventario.models import Alimentador, EquipoETC, SeccionRegional, SubEstacion
+from apps.inventario.models import (
+    NOMBRES_SUBESTACIONES as NOMBRES, Alimentador, EquipoETC, SeccionRegional, SubEstacion,
+)
 
-# El informe viene en mayúsculas y sin tildes: nombre oficial con su ortografía
-NOMBRES = {
-    'CBO': 'Coronel Bogado', 'SPP': 'San Pedro del Paraná', 'FRA': 'Fram',
-    'NAT': 'Natalio', 'CAL': 'Carlos Antonio López', 'TRI': 'Trinidad',
-    'PPO': 'Pirapó', 'ENC': 'Encarnación', 'CAM': 'Cambyretá',
-    'NAR': 'Naranjal', 'HOE': 'Hohenau', 'AYO': 'Ayolas',
-    'SPA': 'San Patricio', 'SIG': 'San Ignacio', 'SJB': 'San Juan Bautista',
-    'VIN': 'Villalbín', 'PIL': 'Pilar', 'BRO': 'Buey Rodeo',
-}
 # Departamento del informe -> código de la sección regional
 SECCION_POR_DEPARTAMENTO = {'ITAPUA': 'ENC', 'MISIONES': 'MIS', 'NEEMBUCU': 'PIL'}
 

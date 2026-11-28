@@ -14,7 +14,7 @@ from django.contrib.gis.geos import Point
 from django.core.management.base import BaseCommand, CommandError
 from openpyxl import load_workbook
 
-from apps.inventario.models import SubEstacion, Alimentador, Sitio
+from apps.inventario.models import NOMBRES_SUBESTACIONES, SubEstacion, Alimentador, Sitio
 
 
 # Índices de columnas (0-based) en la hoja Sitio
@@ -207,7 +207,8 @@ class Command(BaseCommand):
                 continue
 
             try:
-                sub, _ = SubEstacion.objects.get_or_create(codigo=sub_code)
+                sub, _ = SubEstacion.objects.get_or_create(
+                    codigo=sub_code, defaults={'nombre': NOMBRES_SUBESTACIONES.get(sub_code, '')})
                 alimentador, _ = Alimentador.objects.get_or_create(
                     codigo=al_code,
                     defaults={'subestacion': sub},

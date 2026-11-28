@@ -524,7 +524,11 @@ class ReclamoAdmin(admin.ModelAdmin):
         if not request.user.es_admin_eam and db_field.name in ('agencia_responsable', 'responsable_asignado'):
             mias = agencias_del_usuario(request.user)
             visibles = filtrar_reclamos_por_rol(request.user, Reclamo.objects.all())
-            if db_field.name == 'agencia_responsable':
+            if mias is None:   # opera todo el departamento
+                kwargs['queryset'] = (Agencia.objects.all() if db_field.name == 'agencia_responsable'
+                                      else Personal.objects.filter(
+                                          Q(activo=True) | Q(reclamos_asignados__in=visibles)).distinct())
+            elif db_field.name == 'agencia_responsable':
                 kwargs['queryset'] = Agencia.objects.filter(
                     Q(id__in=mias) | Q(reclamos_responsable__in=visibles)).distinct()
             else:

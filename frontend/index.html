@@ -16,8 +16,8 @@
     <link rel="preload" href="/static/vendor/inter-5.2.5/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 
     <!-- Nuestro CSS: variables compartidas con el admin + estilos de la app -->
-    <link rel="stylesheet" href="/static/css/tokens.css?v=127">
-    <link rel="stylesheet" href="/static/css/style.css?v=127">
+    <link rel="stylesheet" href="/static/css/tokens.css?v=128">
+    <link rel="stylesheet" href="/static/css/style.css?v=128">
 
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#002f6c">
@@ -191,6 +191,11 @@
         </ul>
 
         <ul class="sidebar-list" style="margin-top: 8px;">
+            <li>
+                <button type="button" class="sidebar-boton" data-accion="abrir-cambiar-clave">
+                <i class="fa-solid fa-key" aria-hidden="true"></i> Cambiar contraseña
+                </button>
+            </li>
             <li>
                 <button type="button" class="sidebar-boton" data-accion="abrir-logout">
                 <i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i> Cerrar sesión
@@ -818,6 +823,34 @@
         </div>
     </div>
 
+    <!-- MODAL: CAMBIAR CONTRASEÑA -->
+    <div id="modal-clave" class="modal-overlay" role="dialog" aria-labelledby="titulo-clave">
+        <form class="modal-card form" id="form-clave" novalidate>
+            <h3 id="titulo-clave">Cambiar contraseña</h3>
+            <!-- usuario oculto: ayuda al gestor de contraseñas del celular a guardar la nueva -->
+            <input type="text" id="clave-usuario" autocomplete="username" hidden>
+            <div class="form-group">
+                <label for="clave-actual">Contraseña actual</label>
+                <input type="password" id="clave-actual" class="form-control" autocomplete="current-password" required>
+            </div>
+            <div class="form-group">
+                <label for="clave-nueva">Contraseña nueva</label>
+                <input type="password" id="clave-nueva" class="form-control" autocomplete="new-password" minlength="8" required aria-describedby="clave-ayuda">
+                <p id="clave-ayuda" class="ayuda">Al menos 8 caracteres. Que no se parezca a tu nombre ni sea una muy común (como 12345678).</p>
+            </div>
+            <div class="form-group">
+                <label for="clave-repetir">Repetí la contraseña nueva</label>
+                <input type="password" id="clave-repetir" class="form-control" autocomplete="new-password" required>
+            </div>
+            <label class="check-clave"><input type="checkbox" id="clave-mostrar"> Mostrar contraseñas</label>
+            <p class="login-error" id="clave-error" role="alert"></p>
+            <div class="modal-actions">
+                <button type="button" class="btn-modal-cancel" data-accion="cancelar-clave">Cancelar</button>
+                <button type="submit" class="btn-modal-confirm" id="btn-guardar-clave">Guardar</button>
+            </div>
+        </form>
+    </div>
+
     <!-- NOTIFICACIONES -->
     <div id="toast-container" aria-live="polite">
         <!-- Aviso de versión nueva (lo muestra app.js; queda fijo hasta que se toque) -->
@@ -832,6 +865,6 @@
     <script src="/static/vendor/leaflet-1.9.4/leaflet.js"></script>
     <script src="/static/vendor/markercluster-1.5.3/leaflet.markercluster.js"></script>
     <!-- Nuestro JS -->
-    <script type="module" src="/static/js/app.js?v=127"></script>
+    <script type="module" src="/static/js/app.js?v=128"></script>
 </body>
 </html>

@@ -1,10 +1,11 @@
 /**
  * SIGVER - Sesión: login, datos del usuario en el menú y cierre de sesión.
  */
-import { estado } from './estado.js?v=127';
-import { iniciales } from './util.js?v=127';
-import { abrirModal, cerrarModal, registrarAcciones, showToast } from './ui.js?v=127';
-import { obtenerPendientesPropios } from './sync.js?v=127';
+import { estado } from './estado.js?v=128';
+import { iniciales } from './util.js?v=128';
+import { abrirModal, cerrarMenu, cerrarModal, registrarAcciones, showToast } from './ui.js?v=128';
+import { fetchConToken } from './api.js?v=128';   // import circular: solo se usa al enviar el formulario
+import { obtenerPendientesPropios } from './sync.js?v=128';
 
 const ROLES_GESTION = ['supervisor_zona', 'admin_eam'];
 const NOMBRE_ROL = {
@@ -249,4 +250,76 @@ registrarAcciones({
         boton.textContent = 'Cerrando...';
         ejecutarCierreSesion();
     },
+});
+
+// ==========================================
+// Cambiar contraseña
+// ==========================================
+const formClave = document.getElementById('form-clave');
+const errorClave = document.getElementById('clave-error');
+const camposClave = ['clave-actual', 'clave-nueva', 'clave-repetir'].map((id) => document.getElementById(id));
+
+function abrirCambiarClave() {
+    cerrarMenu();
+    formClave.reset();
+    camposClave.forEach((c) => { c.type = 'password'; });
+    errorClave.textContent = '';
+    document.getElementById('clave-usuario').value = estado.usuario?.username || '';
+    abrirModal('modal-clave');
+    camposClave[0].focus();
+}
+
+document.getElementById('clave-mostrar').addEventListener('change', (e) => {
+    camposClave.forEach((c) => { c.type = e.target.checked ? 'text' : 'password'; });
+});
+
+formClave.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const [actual, nueva, repetir] = camposClave.map((c) => c.value);
+    errorClave.textContent = '';
+    if (!actual || !nueva) {
+        errorClave.textContent = 'Completá la contraseña actual y la nueva.';
+        return;
+    }
+    if (nueva !== repetir) {
+        errorClave.textContent = 'Las dos contraseñas nuevas no coinciden.';
+        camposClave[2].focus();
+        return;
+    }
+    if (!navigator.onLine) {
+        errorClave.textContent = 'Sin conexión. Para cambiar la contraseña hace falta internet.';
+        return;
+    }
+
+    const boton = document.getElementById('btn-guardar-clave');
+    boton.disabled = true;
+    boton.textContent = 'Guardando...';
+    try {
+        const res = await fetchConToken('/api/usuarios/cambiar-clave/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ actual, nueva }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            errorClave.textContent = data.detail || [...(data.actual || []), ...(data.nueva || [])].join(' ')
+                || 'No se pudo cambiar la contraseña. Probá de nuevo.';
+            return;
+        }
+        // Las otras sesiones quedaron revocadas: este celular sigue con los tokens nuevos
+        localStorage.setItem('sigver_token', data.access);
+        localStorage.setItem('sigver_refresh_token', data.refresh);
+        cerrarModal('modal-clave');
+        showToast('Contraseña cambiada. Usala la próxima vez que ingreses.', 'success');
+    } catch {
+        errorClave.textContent = 'No se pudo conectar con el servidor. Revisá la señal y probá de nuevo.';
+    } finally {
+        boton.disabled = false;
+        boton.textContent = 'Guardar';
+    }
+});
+
+registrarAcciones({
+    'abrir-cambiar-clave': abrirCambiarClave,
+    'cancelar-clave': () => cerrarModal('modal-clave'),
 });

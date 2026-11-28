@@ -89,6 +89,18 @@ class Personal(models.Model):
 # INVENTARIO: RED ELÉCTRICA
 # =====================================================
 
+# Nombre oficial de cada sigla, con su ortografía (los Excel vienen en mayúsculas y sin tildes).
+# Fuente: informe de ANDE de equipos telecomandados; CAU no figura ahí (solo tiene un regulador).
+NOMBRES_SUBESTACIONES = {
+    'CBO': 'Coronel Bogado', 'SPP': 'San Pedro del Paraná', 'FRA': 'Fram',
+    'NAT': 'Natalio', 'CAL': 'Carlos Antonio López', 'TRI': 'Trinidad',
+    'PPO': 'Pirapó', 'ENC': 'Encarnación', 'CAM': 'Cambyretá',
+    'NAR': 'Naranjal', 'HOE': 'Hohenau', 'AYO': 'Ayolas',
+    'SPA': 'San Patricio', 'SIG': 'San Ignacio', 'SJB': 'San Juan Bautista',
+    'VIN': 'Villalbín', 'PIL': 'Pilar', 'BRO': 'Buey Rodeo',
+    'CAU': 'Caapucú',
+}
+
 class SubEstacion(models.Model):
     """Estación o subestación eléctrica (BRO, ENC, NAT, etc.)."""
     TIPO = [

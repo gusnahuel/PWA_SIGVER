@@ -2,15 +2,15 @@
  * SIGVER - Reclamos: lista por pestañas (con caché para ver sin señal) y
  * envío de la evidencia del técnico para que el supervisor valide en el admin.
  */
-import { estado } from './estado.js?v=127';
-import { fetchConToken, fetchConTimeout, esErrorDeRed, describirErrorServidor } from './api.js?v=127';
-import { comprimirImagen, escapeHtml } from './util.js?v=127';
+import { estado } from './estado.js?v=128';
+import { fetchConToken, fetchConTimeout, esErrorDeRed, describirErrorServidor } from './api.js?v=128';
+import { comprimirImagen, escapeHtml } from './util.js?v=128';
 import {
     abrirModal, abrirPanel, cerrarMenu, cerrarModal, esEscritorio, marcarNav, menuAbierto, ponerBadge,
     registrarAcciones, showToast,
-} from './ui.js?v=127';
-import { esGestor } from './sesion.js?v=127';
-import { cerrarTarjetaEquipo } from './mapa.js?v=127';
+} from './ui.js?v=128';
+import { esGestor } from './sesion.js?v=128';
+import { cerrarTarjetaEquipo } from './mapa.js?v=128';
 
 const GRUPOS_RECLAMOS = {
     abiertos: ['ABIERTO', 'ASIGNADO'],
